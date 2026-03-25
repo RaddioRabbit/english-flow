@@ -1,0 +1,141 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Scholarly ink palette - deep navy + warm gold */
+    --background: 40 33% 98%;
+    --foreground: 220 30% 12%;
+
+    --card: 40 25% 97%;
+    --card-foreground: 220 30% 12%;
+
+    --popover: 40 25% 97%;
+    --popover-foreground: 220 30% 12%;
+
+    --primary: 220 45% 20%;
+    --primary-foreground: 40 33% 96%;
+
+    --secondary: 35 30% 92%;
+    --secondary-foreground: 220 30% 18%;
+
+    --muted: 35 15% 93%;
+    --muted-foreground: 220 12% 48%;
+
+    --accent: 38 75% 55%;
+    --accent-foreground: 220 40% 12%;
+
+    --destructive: 0 65% 52%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 35 18% 88%;
+    --input: 35 18% 88%;
+    --ring: 220 45% 20%;
+
+    --radius: 0.625rem;
+
+    /* Custom tokens */
+    --gold: 38 75% 55%;
+    --gold-light: 38 60% 78%;
+    --gold-dark: 38 80% 42%;
+    --ink: 220 45% 20%;
+    --ink-light: 220 25% 35%;
+    --parchment: 40 33% 98%;
+    --parchment-dark: 35 25% 92%;
+    --success: 152 55% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 40% 12%;
+    --info: 210 75% 52%;
+    --info-foreground: 0 0% 100%;
+
+    /* Gradients */
+    --gradient-gold: linear-gradient(135deg, hsl(38 75% 55%), hsl(42 80% 65%));
+    --gradient-ink: linear-gradient(135deg, hsl(220 45% 20%), hsl(220 35% 30%));
+    --gradient-parchment: linear-gradient(180deg, hsl(40 33% 98%), hsl(35 25% 94%));
+    --gradient-hero: linear-gradient(135deg, hsl(220 45% 15%), hsl(220 40% 22%), hsl(225 35% 28%));
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px hsl(220 30% 12% / 0.06);
+    --shadow-md: 0 4px 12px hsl(220 30% 12% / 0.08);
+    --shadow-lg: 0 8px 30px hsl(220 30% 12% / 0.1);
+    --shadow-gold: 0 4px 20px hsl(38 75% 55% / 0.2);
+
+    /* Typography */
+    --font-display: 'Playfair Display', 'Noto Serif SC', serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-serif-cn: 'Noto Serif SC', serif;
+
+    --sidebar-background: 220 45% 20%;
+    --sidebar-foreground: 40 25% 90%;
+    --sidebar-primary: 38 75% 55%;
+    --sidebar-primary-foreground: 220 40% 12%;
+    --sidebar-accent: 220 40% 28%;
+    --sidebar-accent-foreground: 40 25% 90%;
+    --sidebar-border: 220 35% 30%;
+    --sidebar-ring: 38 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-body {
+    font-family: var(--font-body);
+  }
+  .font-serif-cn {
+    font-family: var(--font-serif-cn);
+  }
+  .gradient-gold {
+    background: var(--gradient-gold);
+  }
+  .gradient-ink {
+    background: var(--gradient-ink);
+  }
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .gradient-parchment {
+    background: var(--gradient-parchment);
+  }
+  .shadow-elegant {
+    box-shadow: var(--shadow-md);
+  }
+  .shadow-gold {
+    box-shadow: var(--shadow-gold);
+  }
+  .text-gold {
+    color: hsl(var(--gold));
+  }
+  .text-ink {
+    color: hsl(var(--ink));
+  }
+  .text-ink-light {
+    color: hsl(var(--ink-light));
+  }
+  .bg-parchment {
+    background-color: hsl(var(--parchment));
+  }
+  .bg-parchment-dark {
+    background-color: hsl(var(--parchment-dark));
+  }
+}

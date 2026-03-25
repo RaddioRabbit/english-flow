@@ -1,0 +1,64 @@
+{
+  "title": "《傲慢与偏见》开篇名句精讲",
+  "welcomeMessage": "欢迎来到英语名著句子讲解小课堂",
+  "introduction": {
+    "text": "大家好，欢迎来到英语名著句子讲解小课堂。今天我们要学习的是简奥斯汀名著《傲慢与偏见》的开篇第一句。",
+    "audio": "audio/introduction.mp3"
+  },
+  "sections": [
+    {
+      "moduleId": "translation",
+      "moduleName": "句译对照",
+      "imageRef": "translation",
+      "content": {
+        "text": "我们先来看这张句译对照图。原文是：It is a truth universally acknowledged...",
+        "audio": "audio/translation.mp3"
+      }
+    },
+    {
+      "moduleId": "grammar",
+      "moduleName": "句式分析",
+      "imageRef": "grammar",
+      "content": {
+        "text": "我们再看这张句式分析图。这个句子用的是一般现在时...",
+        "audio": "audio/grammar.mp3"
+      }
+    },
+    {
+      "moduleId": "summary",
+      "moduleName": "句式总结",
+      "imageRef": "summary",
+      "content": {
+        "text": "再看这张句式总结图。这个句子的核心模板是...",
+        "audio": "audio/summary.mp3"
+      }
+    },
+    {
+      "moduleId": "vocabulary",
+      "moduleName": "词汇解析",
+      "imageRef": "vocabulary",
+      "content": {
+        "text": "现在我们来看这张词汇解析图。第一个词是universally...",
+        "audio": "audio/vocabulary.mp3"
+      }
+    },
+    {
+      "moduleId": "ielts",
+      "moduleName": "雅思备考",
+      "imageRef": "ielts",
+      "content": {
+        "text": "最后看这张雅思备考图。这句话在雅思考试中有四个方面的应用价值...",
+        "audio": "audio/ielts.mp3"
+      }
+    }
+  ],
+  "conclusion": {
+    "text": "好了，今天关于这个句子的讲解就到这里。我们下次再见。",
+    "audio": "audio/conclusion.mp3"
+  },
+  "metadata": {
+    "voice": "nova",
+    "speed": 1.0,
+    "generatedAt": "2026-03-18T10:30:00Z"
+  }
+}

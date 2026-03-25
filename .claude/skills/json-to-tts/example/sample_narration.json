@@ -1,0 +1,31 @@
+{
+  "segments": [
+    {
+      "id": "intro",
+      "moduleId": "translation",
+      "imageRefs": ["translation"],
+      "narration": "Welcome to English Flow. Today we'll learn how to analyze English sentences and improve your language skills."
+    },
+    {
+      "id": "vocab-1",
+      "moduleId": "vocabulary",
+      "imageRefs": ["vocabulary"],
+      "narration": "Let's look at some key vocabulary words. The word 'analyze' means to examine something in detail to understand it better."
+    },
+    {
+      "id": "grammar-1",
+      "moduleId": "grammar",
+      "imageRefs": ["grammar"],
+      "narration": "Now, let's break down the sentence structure. This is a complex sentence with a main clause and a subordinate clause."
+    },
+    {
+      "id": "ielts-1",
+      "moduleId": "ielts",
+      "imageRefs": ["ielts"],
+      "narration": "For IELTS preparation, remember to use complex sentence structures like this one to demonstrate your grammatical range."
+    }
+  ],
+  "fullNarration": "Welcome to English Flow. Today we'll learn how to analyze English sentences and improve your language skills. Let's look at some key vocabulary words. The word 'analyze' means to examine something in detail to understand it better. Now, let's break down the sentence structure. This is a complex sentence with a main clause and a subordinate clause. For IELTS preparation, remember to use complex sentence structures like this one to demonstrate your grammatical range.",
+  "source": "english-flow-agent",
+  "model": "gpt-4o-mini"
+}

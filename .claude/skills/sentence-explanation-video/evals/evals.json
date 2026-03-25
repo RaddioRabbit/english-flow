@@ -1,0 +1,50 @@
+{
+  "skill_name": "sentence-explanation-video",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "将sample-audio-result.json中的音频和图片合成为视频，图片放在images/目录下，输出为output/final-video.mp4，使用默认的1080x1920竖屏分辨率",
+      "expected_output": "生成一个MP4视频文件，按顺序播放五张图片，每张图片显示时长等于对应音频长度。第一张图播放introduction+translation的音频，第五张图播放ielts+conclusion的音频",
+      "files": ["files/sample-audio-result.json"],
+      "assertions": [
+        {
+          "name": "视频文件存在",
+          "type": "file_exists",
+          "target": "output/final-video.mp4"
+        },
+        {
+          "name": "视频格式正确",
+          "type": "file_contains",
+          "target": "output/final-video.mp4",
+          "expected": "ftypmp4"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "使用generate_video.py脚本，输入result-with-audio.json和图片目录，生成1920x1080横屏视频",
+      "expected_output": "生成1920x1080分辨率的MP4视频，图片被正确缩放以适应屏幕",
+      "files": [],
+      "assertions": [
+        {
+          "name": "视频分辨率正确",
+          "type": "custom",
+          "description": "视频分辨率为1920x1080"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "测试视频生成流程：从sentence-explanation-tts的JSON输出创建讲解视频，确保音画同步",
+      "expected_output": "视频播放时，每张图片的显示时间与对应音频完全同步，无延迟或提前切换",
+      "files": [],
+      "assertions": [
+        {
+          "name": "视频时长匹配音频总时长",
+          "type": "custom",
+          "description": "视频总时长约等于所有音频片段之和"
+        }
+      ]
+    }
+  ]
+}

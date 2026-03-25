@@ -1,0 +1,24 @@
+{
+  "skill_name": "sentence-explanation-tts",
+  "evals": [
+    {
+      "id": 1,
+      "name": "基础讲解文章转语音",
+      "prompt": "将以下english-sentence-explanation生成的讲解文章转换为带语音的JSON格式。请使用nova语音，speed=1.0，为每个模块生成独立的mp3文件。\n\n输入文章：\n{\n  \"article\": {\n    \"title\": \"《双城记》悬疑句式精讲\",\n    \"welcomeMessage\": \"欢迎来到英语名著句子讲解小课堂\",\n    \"introduction\": \"大家好，欢迎来到英语名著句子讲解小课堂。今天我们要学习的是狄更斯名著《双城记》中的一个句子。\",\n    \"sections\": [\n      {\n        \"moduleId\": \"translation\",\n        \"moduleName\": \"句译对照\",\n        \"imageRef\": \"translation\",\n        \"content\": \"我们先来看这张句译对照图。原文是：However, I said no more to the boy of what I had heard。意思是：然而，对于我所听到的，我对那男孩只字未提。\"\n      },\n      {\n        \"moduleId\": \"grammar\",\n        \"moduleName\": \"句式分析\",\n        \"imageRef\": \"grammar\",\n        \"content\": \"我们再看这张句式分析图。这个句子用的是一般过去时和主动语态。它的结构是主语加谓语加宾语。\"\n      },\n      {\n        \"moduleId\": \"summary\",\n        \"moduleName\": \"句式总结\",\n        \"imageRef\": \"summary\",\n        \"content\": \"再看这张句式总结图。这个句子的核心模板是say something to somebody of something。\"\n      },\n      {\n        \"moduleId\": \"vocabulary\",\n        \"moduleName\": \"词汇解析\",\n        \"imageRef\": \"vocabulary\",\n        \"content\": \"现在我们来看这张词汇解析图。第一个词是however，意思是然而。第二个词是mean，意思是打算。\"\n      },\n      {\n        \"moduleId\": \"ielts\",\n        \"moduleName\": \"雅思备考\",\n        \"imageRef\": \"ielts\",\n        \"content\": \"最后看这张雅思备考图。这句话在雅思考试中有四个方面的应用价值。听力要注意转折语气。\"\n      }\n    ],\n    \"conclusion\": \"好了，今天关于这个句子的讲解就到这里。希望大家能把今天学到的句式和词汇用起来。\",\n    \"fullScript\": \"完整的逐字稿文本...\"\n  }\n}\n\n要求：\n1. 输出JSON格式，包含原文和生成的音频文件路径\n2. introduction、5个sections、conclusion都要生成语音\n3. 每个模块独立生成mp3文件\n4. 包含metadata字段记录生成信息",
+      "expected_output": "JSON格式，包含introduction、5个模块、conclusion的text和audio字段，以及metadata"
+    },
+    {
+      "id": 2,
+      "name": "完整文章转语音",
+      "prompt": "将讲解文章转为带语音的JSON。输入文件在evals/files/sample-article.json，请读取后处理。要求：1. 使用echo语音 2. 语速0.9 3. 输出到output/目录 4. 返回完整JSON",
+      "expected_output": "完整JSON输出，使用echo语音，speed=0.9",
+      "files": ["evals/files/sample-article.json"]
+    },
+    {
+      "id": 3,
+      "name": "指定输出目录",
+      "prompt": "将以下文章转为语音，音频文件保存到audio/lesson-001/目录。文章：{article JSON}。使用nova语音，speed=1.0。",
+      "expected_output": "JSON中的audio路径以audio/lesson-001/开头"
+    }
+  ]
+}

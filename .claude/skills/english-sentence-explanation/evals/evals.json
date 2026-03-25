@@ -1,0 +1,23 @@
+{
+  "skill_name": "english-sentence-explanation",
+  "evals": [
+    {
+      "id": 1,
+      "name": "经典文学名句讲解",
+      "prompt": "根据以下数据生成英语句子讲解文章：\n原句：It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.\n书名：《傲慢与偏见》\n作者：简·奥斯汀\n\n文本解析：\n- 翻译：凡是有钱的单身汉，总想娶位太太，这已经成了一条举世公认的真理。\n- 情境：19世纪英国乡村社会，讽刺婚姻与金钱的关系，开篇名句奠定全书基调\n- 语法：一般现在时，被动语态，It is + n. + that从句结构\n- 词汇：universally（普遍地），acknowledged（公认的），possession（拥有）\n- 雅思：听力注意universally的发音，口语写作可用It is...that句式表达普遍观点\n\n五张图片已生成好，请输出JSON格式的讲解文章。",
+      "expected_output": "JSON格式的讲解文章，包含welcomeMessage、五个模块的讲解内容，总字数500-600字，语气生动活泼适合高中生"
+    },
+    {
+      "id": 2,
+      "name": "励志名言讲解",
+      "prompt": "根据以下数据生成英语句子讲解文章：\n原句：The only way to do great work is to love what you do.\n书名：《史蒂夫·乔布斯传》\n作者：沃尔特·艾萨克森\n\n文本解析：\n- 翻译：做伟大的工作的唯一方法就是热爱你所做的事。\n- 情境：乔布斯2005年斯坦福演讲名句，关于人生选择和职业规划\n- 语法：一般现在时，主系表结构，不定式作表语和宾语\n- 词汇：great（伟大的，出色的），唯一（only），热爱（love）\n- 雅思：口语考试可用于谈论career goals，写作可用于work-life balance话题\n\n五张图片已生成好，请输出JSON格式的讲解文章。",
+      "expected_output": "JSON格式的讲解文章，包含完整的五个模块讲解，开头有'欢迎来到英语名著句子讲解小课堂'，语气亲切活泼"
+    },
+    {
+      "id": 3,
+      "name": "复杂长句讲解",
+      "prompt": "根据以下数据生成英语句子讲解文章：\n原句：So we beat on, boats against the current, borne back ceaselessly into the past.\n书名：《了不起的盖茨比》\n作者：菲茨杰拉德\n\n文本解析：\n- 翻译：于是我们奋力向前划，逆流向上的小船，不停地被浪潮推回到过去。\n- 情境：小说结尾名句，比喻人生与命运的抗争，美国梦的幻灭\n- 语法：一般现在时，倒装省略结构，比喻修辞，borne是bear的过去分词\n- 词汇：beat on（奋力前行），current（潮流，水流），ceaselessly（不停地），borne（被承载）\n- 雅思：阅读注意倒装结构，写作可用比喻句式增强文采\n\n五张图片已生成好，请输出JSON格式的讲解文章。",
+      "expected_output": "JSON格式的讲解文章，五个模块完整，讲解复杂语法时通俗易懂，适合高中生理解，字数符合要求"
+    }
+  ]
+}
