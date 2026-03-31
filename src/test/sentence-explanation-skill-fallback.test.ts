@@ -135,7 +135,7 @@ describe("english sentence explanation skill provider fallback", () => {
     resetRuntimeSkillRegistry();
   });
 
-  it("falls back to the openai-compatible provider when the preferred provider returns incomplete sections", async () => {
+  it("does not fall back to the openai-compatible provider when anthropic returns incomplete sections", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -162,22 +162,6 @@ describe("english sentence explanation skill provider fallback", () => {
         } satisfies Partial<Response> as Response;
       }
 
-      if (url.includes("/chat/completions")) {
-        return {
-          ok: true,
-          text: async () =>
-            JSON.stringify({
-              choices: [
-                {
-                  message: {
-                    content: JSON.stringify(buildCompleteArticle()),
-                  },
-                },
-              ],
-            }),
-        } satisfies Partial<Response> as Response;
-      }
-
       throw new Error(`Unexpected fetch URL: ${url}`);
     });
 
@@ -191,9 +175,6 @@ describe("english sentence explanation skill provider fallback", () => {
       ANTHROPIC_API_KEY: "anthropic-key",
       ANTHROPIC_BASE_URL: "https://api.kimi.com/coding/",
       ANTHROPIC_MODEL: "kimi-for-coding",
-      OPENAI_API_KEY: "openai-key",
-      OPENAI_BASE_URL: "https://aifast.site/v1",
-      OPENAI_MODEL: "gpt-4.1",
     });
 
     const result = (await (globalThis as typeof globalThis & {
@@ -204,14 +185,14 @@ describe("english sentence explanation skill provider fallback", () => {
       model: string;
     };
 
-    expect(result.source).toBe("openai-compatible-api");
-    expect(result.model).toBe("gpt-4.1");
+    expect(result.source).toBe("anthropic-compatible-api");
+    expect(result.model).toBe("kimi-for-coding");
     expect(result.article.sections.map((section) => section.moduleId)).toEqual(sentenceExplanationModuleOrder);
     expect(result.article.sections.every((section) => section.lines?.length)).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns a best-effort complete article when every provider response is structurally incomplete", async () => {
+  it("returns a best-effort complete article when the anthropic response is structurally incomplete", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -238,28 +219,6 @@ describe("english sentence explanation skill provider fallback", () => {
         } satisfies Partial<Response> as Response;
       }
 
-      if (url.includes("/chat/completions")) {
-        return {
-          ok: true,
-          text: async () =>
-            JSON.stringify({
-              choices: [
-                {
-                  message: {
-                    content: JSON.stringify({
-                      article: {
-                        title: "OpenAI draft",
-                        intro: "Backup intro",
-                        ending: "Backup ending",
-                      },
-                    }),
-                  },
-                },
-              ],
-            }),
-        } satisfies Partial<Response> as Response;
-      }
-
       throw new Error(`Unexpected fetch URL: ${url}`);
     });
 
@@ -273,9 +232,6 @@ describe("english sentence explanation skill provider fallback", () => {
       ANTHROPIC_API_KEY: "anthropic-key",
       ANTHROPIC_BASE_URL: "https://api.kimi.com/coding/",
       ANTHROPIC_MODEL: "kimi-for-coding",
-      OPENAI_API_KEY: "openai-key",
-      OPENAI_BASE_URL: "https://aifast.site/v1",
-      OPENAI_MODEL: "gpt-4.1",
     });
 
     const result = (await (globalThis as typeof globalThis & {
@@ -298,18 +254,19 @@ describe("english sentence explanation skill provider fallback", () => {
     expect(result.article.conclusionLines.length).toBeGreaterThan(0);
     expect(result.article.sections.map((section) => section.moduleId)).toEqual(sentenceExplanationModuleOrder);
     expect(result.article.sections.every((section) => section.lines?.length)).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  /* it("repairs the vocabulary section so every word keeps meaning, example, and translation without pronunciation notes", async () => {
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      text: async () =>
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
+  it("repairs the vocabulary section so every word keeps meaning, example, and translation without pronunciation notes", async () => {
+    const fetchMock = vi.fn(async () => {
+      return {
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
                   article: {
                     title: "Sentence explanation",
                     welcomeMessage: "Welcome",
@@ -320,7 +277,10 @@ describe("english sentence explanation skill provider fallback", () => {
                             moduleId,
                             moduleName: "vocabulary",
                             imageRef: "vocabulary",
-                            lines: ["然后看词汇解析图。", "however 的发音是 something."],
+                            lines: [
+                              "\u7136\u540e\u770b\u8bcd\u6c47\u89e3\u6790\u56fe\u3002",
+                              "however \u7684\u53d1\u97f3\u662f something.",
+                            ],
                           }
                         : {
                             moduleId,
@@ -332,79 +292,6 @@ describe("english sentence explanation skill provider fallback", () => {
                     conclusionLines: ["Conclusion line"],
                   },
                 }),
-              },
-            },
-          ],
-        }),
-    })) as unknown as ReturnType<typeof vi.fn>;
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { installEnglishSentenceExplanationSkillShim } = await import(
-      "../../server/english-sentence-explanation-skill-shim"
-    );
-
-    installEnglishSentenceExplanationSkillShim({
-      OPENAI_API_KEY: "openai-key",
-      OPENAI_BASE_URL: "https://aifast.site/v1",
-      OPENAI_MODEL: "gpt-4.1",
-    });
-
-    const result = (await (globalThis as typeof globalThis & {
-      skill: (name: string, params: unknown) => Promise<unknown>;
-    }).skill("english-sentence-explanation", buildSkillParamsWithVocabulary())) as {
-      article: { sections: Array<{ moduleId: ModuleId; content: string }> };
-    };
-
-    const vocabularySection = result.article.sections.find((section) => section.moduleId === "vocabulary");
-
-    expect(vocabularySection?.content).toContain("however");
-    expect(vocabularySection?.content).toContain("然而");
-    expect(vocabularySection?.content).toContain("However, the plan still worked.");
-    expect(vocabularySection?.content).toContain("然而，这个计划最终还是奏效了。");
-    expect(vocabularySection?.content).toContain("mean");
-    expect(vocabularySection?.content).toContain("打算");
-    expect(vocabularySection?.content).toContain("I mean to finish the work tonight.");
-    expect(vocabularySection?.content).toContain("我打算今晚完成这项工作。");
-    expect(vocabularySection?.content).not.toMatch(/音标|发音|读音|读作|念作/);
-  }); */
-
-  it("repairs the vocabulary section so every word keeps meaning, example, and translation without pronunciation notes", async () => {
-    const fetchMock = vi.fn(async () => {
-      return {
-        ok: true,
-        text: async () =>
-          JSON.stringify({
-            choices: [
-              {
-                message: {
-                  content: JSON.stringify({
-                    article: {
-                      title: "Sentence explanation",
-                      welcomeMessage: "Welcome",
-                      introductionLines: ["Intro line"],
-                      sections: sentenceExplanationModuleOrder.map((moduleId) =>
-                        moduleId === "vocabulary"
-                          ? {
-                              moduleId,
-                              moduleName: "vocabulary",
-                              imageRef: "vocabulary",
-                              lines: [
-                                "\u7136\u540e\u770b\u8bcd\u6c47\u89e3\u6790\u56fe\u3002",
-                                "however \u7684\u53d1\u97f3\u662f something.",
-                              ],
-                            }
-                          : {
-                              moduleId,
-                              moduleName: moduleId,
-                              imageRef: moduleId,
-                              lines: [`${moduleId} line`],
-                            },
-                      ),
-                      conclusionLines: ["Conclusion line"],
-                    },
-                  }),
-                },
               },
             ],
           }),
@@ -418,9 +305,9 @@ describe("english sentence explanation skill provider fallback", () => {
     );
 
     installEnglishSentenceExplanationSkillShim({
-      OPENAI_API_KEY: "openai-key",
-      OPENAI_BASE_URL: "https://aifast.site/v1",
-      OPENAI_MODEL: "gpt-4.1",
+      ANTHROPIC_API_KEY: "anthropic-key",
+      ANTHROPIC_BASE_URL: "https://api.kimi.com/coding/",
+      ANTHROPIC_MODEL: "kimi-for-coding",
     });
 
     const result = (await (globalThis as typeof globalThis & {
@@ -442,5 +329,76 @@ describe("english sentence explanation skill provider fallback", () => {
     expect(vocabularySection?.content).not.toMatch(
       /\u97f3\u6807|\u53d1\u97f3|\u8bfb\u97f3|\u8bfb\u4f5c|\u5ff5\u4f5c/u,
     );
+  });
+
+  it("keeps the existing vocabulary explanation when the model already covered every numbered word once", async () => {
+    const fetchMock = vi.fn(async () => {
+      return {
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  article: {
+                    title: "Sentence explanation",
+                    welcomeMessage: "Welcome",
+                    introductionLines: ["Intro line"],
+                    sections: sentenceExplanationModuleOrder.map((moduleId) =>
+                      moduleId === "vocabulary"
+                        ? {
+                            moduleId,
+                            moduleName: "vocabulary",
+                            imageRef: "vocabulary",
+                            lines: [
+                              "\u7136\u540e\u770b\u8bcd\u6c47\u89e3\u6790\u56fe\u3002",
+                              "\u7b2c1\u4e2a\u8bcd\u662f however\uff0c\u5b83\u662f\u526f\u8bcd\uff0c\u610f\u601d\u662f \u7136\u800c\u3002",
+                              "\u4f8b\u53e5\u662f However, the plan still worked.",
+                              "\u610f\u601d\u662f \u8fd9\u4e2a\u8ba1\u5212\u6700\u540e\u8fd8\u662f\u6210\u4e86\u3002",
+                              "\u7b2c2\u4e2a\u8bcd\u662f mean\uff0c\u5b83\u662f\u52a8\u8bcd\uff0c\u610f\u601d\u662f \u6253\u7b97\u3002",
+                              "\u4f8b\u53e5\u662f I mean to finish the work tonight.",
+                              "\u610f\u601d\u662f \u6211\u4eca\u665a\u6253\u7b97\u628a\u8fd9\u9879\u5de5\u4f5c\u505a\u5b8c\u3002",
+                            ],
+                          }
+                        : {
+                            moduleId,
+                            moduleName: moduleId,
+                            imageRef: moduleId,
+                            lines: [`${moduleId} line`],
+                          },
+                    ),
+                    conclusionLines: ["Conclusion line"],
+                  },
+                }),
+              },
+            ],
+          }),
+      } satisfies Partial<Response> as Response;
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { installEnglishSentenceExplanationSkillShim } = await import(
+      "../../server/english-sentence-explanation-skill-shim"
+    );
+
+    installEnglishSentenceExplanationSkillShim({
+      ANTHROPIC_API_KEY: "anthropic-key",
+      ANTHROPIC_BASE_URL: "https://api.kimi.com/coding/",
+      ANTHROPIC_MODEL: "kimi-for-coding",
+    });
+
+    const result = (await (globalThis as typeof globalThis & {
+      skill: (name: string, params: unknown) => Promise<unknown>;
+    }).skill("english-sentence-explanation", buildStrictVocabularySkillParams())) as {
+      article: { sections: Array<{ moduleId: ModuleId; content: string }> };
+    };
+
+    const vocabularySection = result.article.sections.find((section) => section.moduleId === "vocabulary");
+
+    expect(vocabularySection?.content).toContain("\u7b2c1\u4e2a\u8bcd\u662f however");
+    expect(vocabularySection?.content).toContain("\u7b2c2\u4e2a\u8bcd\u662f mean");
+    expect(vocabularySection?.content).not.toContain("\u8fd9\u53e5\u4f8b\u53e5\u7684\u4e2d\u6587\u7ffb\u8bd1\u662f");
   });
 });

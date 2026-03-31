@@ -120,6 +120,59 @@ function listen(server: Server) {
   });
 }
 
+async function probeDuration(filePath: string) {
+  return new Promise<number>((resolve, reject) => {
+    const child = spawn("/opt/homebrew/bin/ffprobe", [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      filePath,
+    ]);
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(Number(stdout.trim()));
+        return;
+      }
+
+      reject(new Error(stderr.trim() || `ffprobe exited with code ${code}`));
+    });
+  });
+}
+
+async function extractFirstAudioTrackDuration(directory: string, videoBuffer: Buffer) {
+  const videoPath = join(directory, "exported-audio-check.mp4");
+  const audioPath = join(directory, "exported-audio-check.m4a");
+
+  await writeFile(videoPath, videoBuffer);
+  await runFfmpeg([
+    "-y",
+    "-i",
+    videoPath,
+    "-map",
+    "0:a:0",
+    "-c:a",
+    "copy",
+    audioPath,
+  ]);
+
+  return probeDuration(audioPath);
+}
+
 describe("generateSentenceExplanationVideoMp4", () => {
   let tempDirectory = "";
   let imageServer: Server | null = null;
@@ -235,6 +288,10 @@ describe("generateSentenceExplanationVideoMp4", () => {
       expect(subtitleTrack).toContain("Welcome to today's sentence explanation.");
       expect(subtitleTrack).toContain("Let's begin with the translation card.");
       expect(subtitleTrack).toContain("That is the closing summary for today.");
+
+      const audioDuration = await extractFirstAudioTrackDuration(tempDirectory, result.buffer);
+      expect(audioDuration).toBeGreaterThan(1.1);
+      expect(audioDuration).toBeLessThan(1.8);
     },
     60_000,
   );

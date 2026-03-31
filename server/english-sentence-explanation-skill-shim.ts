@@ -1,6 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   replaceSentenceExplanationConclusion,
   replaceSentenceExplanationIntroduction,
@@ -24,11 +23,6 @@ import type { ModuleId } from "../src/lib/task-store";
 import { registerRuntimeSkill } from "./runtime-skill-registry";
 
 interface SentenceExplanationEnv {
-  OPENAI_API_KEY?: string;
-  OPENAI_BASE_URL?: string;
-  OPENAI_MODEL?: string;
-  OPENAI_HTTP_TIMEOUT_MS?: string;
-  OPENAI_HTTP_MAX_RETRIES?: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_BASE_URL?: string;
   ANTHROPIC_MODEL?: string;
@@ -36,7 +30,7 @@ interface SentenceExplanationEnv {
   ANTHROPIC_HTTP_MAX_RETRIES?: string;
 }
 
-type Provider = "anthropic" | "openai";
+type Provider = "anthropic";
 
 type ExplanationSkillParams = SentenceExplanationRequest & {
   orderedModules: ModuleId[];
@@ -75,56 +69,94 @@ const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_REMOTE_IMAGE_TIMEOUT_MS = 30_000;
 const DEFAULT_OUTPUT_MAX_TOKENS = 5000;
 const DEFAULT_ANTHROPIC_MODEL = "claude-3-7-sonnet-latest";
-const DEFAULT_OPENAI_MODEL = "gpt-4.1";
 const DEFAULT_WELCOME_MESSAGE = "欢迎来到英语名著句子讲解小课堂";
-const SKILL_DOCUMENT_PATH = resolve(process.cwd(), ".claude/skills/english-sentence-explanation/SKILL.md");
 
 let shimInstalled = false;
-let cachedSkillPrompt: Promise<string> | null = null;
+let cachedSkillPrompt: string | null = null;
 
-function loadSkillPrompt() {
-  if (!cachedSkillPrompt) {
-    cachedSkillPrompt = readFile(SKILL_DOCUMENT_PATH, "utf8").then(stripFrontMatter);
+/**
+ * 读取 english-sentence-explanation skill 的 SKILL.md 文件
+ * 这是模拟 Claude Code 调用 skill 的核心机制
+ */
+function loadSkillPrompt(): string {
+  if (cachedSkillPrompt) {
+    return cachedSkillPrompt;
   }
 
-  return cachedSkillPrompt;
+  try {
+    // 尝试多个可能的路径
+    const possiblePaths = [
+      join(process.cwd(), ".claude", "skills", "english-sentence-explanation", "SKILL.md"),
+      join(__dirname, "..", ".claude", "skills", "english-sentence-explanation", "SKILL.md"),
+      join(__dirname, ".claude", "skills", "english-sentence-explanation", "SKILL.md"),
+    ];
+
+    for (const skillPath of possiblePaths) {
+      try {
+        const content = readFileSync(skillPath, "utf-8");
+        // 提取 frontmatter 后的正文内容
+        const match = content.match(/^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)$/);
+        cachedSkillPrompt = match ? match[1].trim() : content.trim();
+        console.log(`[Skill Shim] Loaded skill prompt from: ${skillPath}`);
+        return cachedSkillPrompt;
+      } catch {
+        continue;
+      }
+    }
+
+    throw new Error("SKILL.md not found in any of the expected paths");
+  } catch (error) {
+    console.error("[Skill Shim] Failed to load SKILL.md:", error);
+    // 返回内嵌的 fallback prompt
+    return getFallbackSkillPrompt();
+  }
 }
 
-function stripFrontMatter(markdown: string) {
-  if (!markdown.startsWith("---")) {
-    return markdown.trim();
-  }
+/**
+ * Fallback skill prompt - 当无法读取 SKILL.md 时使用
+ * 这确保了系统在没有 skill 文件时也能工作
+ */
+function getFallbackSkillPrompt(): string {
+  return `# English Sentence Explanation Skill
 
-  const closingIndex = markdown.indexOf("\n---", 3);
-  if (closingIndex < 0) {
-    return markdown.trim();
-  }
+## 任务目标
+根据英语原句、文本解析结果和对应的讲解图片，生成可直接用于文章展示、TTS和视频字幕的句子讲解文章。
 
-  return markdown.slice(closingIndex + 4).trim();
+## 输出总规则
+1. 只输出合法 JSON，不要 markdown code fence
+2. 所有讲解内容都要数组化，每行不超过50字
+3. 在标点符号后或语气停顿处换行
+4. 文章必须和图片逐一对应
+
+## 内容要求
+- 开场必须用"欢迎来到英语名著句子讲解小课堂"
+- 句译对照：完整念出原句，给出中文翻译
+- 句式分析：讲清时态、语态、结构
+- 句式总结：提炼句型模板
+- 词汇解析：覆盖所有词汇，格式"第X个词是[单词]，它是[词性]，意思是[释义]"
+- 雅思备考：覆盖听说读写四科
+
+## 硬性约束
+- 绝对禁止中文音译（如"发音是XXX"）
+- 原句必须完整念出
+- 所有词汇都必须讲解
+- 总字数800-1000字`;
 }
 
 function resolveProvider(env: SentenceExplanationEnv): Provider {
-  return env.ANTHROPIC_BASE_URL?.trim() || env.ANTHROPIC_API_KEY?.trim() ? "anthropic" : "openai";
+  return "anthropic";
 }
 
 function resolveModel(env: SentenceExplanationEnv, provider: Provider) {
-  if (provider === "anthropic") {
-    return env.ANTHROPIC_MODEL?.trim() || DEFAULT_ANTHROPIC_MODEL;
-  }
-
-  return env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL;
+  return env.ANTHROPIC_MODEL?.trim() || DEFAULT_ANTHROPIC_MODEL;
 }
 
 function resolveApiKey(env: SentenceExplanationEnv, provider: Provider) {
-  return provider === "anthropic"
-    ? env.ANTHROPIC_API_KEY?.trim() || ""
-    : env.OPENAI_API_KEY?.trim() || "";
+  return env.ANTHROPIC_API_KEY?.trim() || "";
 }
 
 function resolveBaseUrl(env: SentenceExplanationEnv, provider: Provider) {
-  return provider === "anthropic"
-    ? env.ANTHROPIC_BASE_URL?.trim() || ""
-    : env.OPENAI_BASE_URL?.trim() || "";
+  return env.ANTHROPIC_BASE_URL?.trim() || "";
 }
 
 function resolvePositiveInteger(raw: string | undefined, fallback: number) {
@@ -157,114 +189,113 @@ function getPromptImageModules(params: ExplanationSkillParams) {
   return params.orderedModules;
 }
 
-function buildJsonOutputContract(target?: SentenceExplanationRegenerationTarget) {
-  if (!target) {
-    return [
-      "Return exactly one top-level JSON object with an article field.",
-      "Inside article, include only: title, welcomeMessage, introduction, introductionLines, sections, conclusion, conclusionLines, totalWordCount, totalLineCount.",
-    ];
-  }
-
-  if (target.type === "introduction") {
-    return [
-      "Return exactly one top-level JSON object with an article field.",
-      "Inside article, include only: welcomeMessage, introduction, introductionLines.",
-      "Do not include title, sections, conclusion, totalWordCount, or totalLineCount.",
-    ];
-  }
-
-  if (target.type === "conclusion") {
-    return [
-      "Return exactly one top-level JSON object with an article field.",
-      "Inside article, include only: conclusion, conclusionLines.",
-      "Do not include title, welcomeMessage, introduction, sections, totalWordCount, or totalLineCount.",
-    ];
-  }
+/**
+ * 构建模拟 Claude Code 调用 skill 的 system prompt
+ * 这是关键：我们让 LLM 扮演 Claude Code，使用 skill 指令来生成内容
+ */
+function buildSimulatedClaudeCodeSystemPrompt(skillPrompt: string, target?: SentenceExplanationRegenerationTarget) {
+  const modeInstructions = target
+    ? `\n\n## 当前任务模式\n这是一个局部重生成任务，只重新生成"${getTargetLabel(target)}"部分。严格按照 SKILL.md 中的局部重生成规则输出。`
+    : `\n\n## 当前任务模式\n这是完整文章生成任务。生成包含开场、五个模块讲解、结尾的完整文章。`;
 
   return [
-    "Return exactly one top-level JSON object with an article field.",
-    "Inside article, include only: sections.",
-    `article.sections must be an array with exactly one section for moduleId ${target.moduleId}.`,
-    "That section must include: moduleId, moduleName, imageRef, content, lines.",
-    "Do not include title, welcomeMessage, introduction, conclusion, totalWordCount, or totalLineCount.",
-  ];
+    "You are Claude Code, a coding assistant with access to various skills.",
+    "",
+    "You have been asked to use the following skill:",
+    "",
+    "=== SKILL START ===",
+    skillPrompt,
+    "=== SKILL END ===",
+    modeInstructions,
+    "",
+    "## Execution Rules",
+    "1. Follow the skill instructions exactly as written",
+    "2. Return ONLY the JSON output specified in the skill",
+    "3. Do not include markdown code fences (\`\`\`json)",
+    "4. Do not add any explanation or commentary",
+    "5. Ensure every array item in introductionLines, section lines, and conclusionLines is at most 50 characters",
+    "6. The output must be valid JSON that can be parsed by JSON.parse()",
+  ].join("\n");
+}
+
+function clipPromptText(value: unknown, maxLength: number) {
+  const normalized = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(1, maxLength - 3)).trim()}...`;
+}
+
+function summarizeTextContentForPrompt(textContent: ExplanationSkillParams["textContent"]) {
+  const PROMPT_SENTENCE_LIMIT = 900;
+  const PROMPT_TRANSLATION_LIMIT = 360;
+  const PROMPT_SEGMENT_LIMIT = 180;
+  const PROMPT_GRAMMAR_LIMIT = 220;
+  const PROMPT_VOCAB_MEANING_LIMIT = 100;
+  const PROMPT_VOCAB_EXAMPLE_LIMIT = 140;
+  const PROMPT_IELTS_LIMIT = 120;
+
+  return {
+    translation: clipPromptText(textContent.translation, PROMPT_TRANSLATION_LIMIT),
+    prompt1: clipPromptText(textContent.prompt1, PROMPT_SEGMENT_LIMIT),
+    prompt2: clipPromptText(textContent.prompt2, PROMPT_SEGMENT_LIMIT),
+    prompt3: clipPromptText(textContent.prompt3, PROMPT_SEGMENT_LIMIT),
+    prompt4: clipPromptText(textContent.prompt4, PROMPT_SEGMENT_LIMIT),
+    grammar: {
+      tense: clipPromptText(textContent.grammar?.tense, 80),
+      voice: clipPromptText(textContent.grammar?.voice, 80),
+      structure: clipPromptText(textContent.grammar?.structure, PROMPT_GRAMMAR_LIMIT),
+    },
+    vocabulary: (textContent.vocabulary ?? []).slice(0, 6).map((card) => ({
+      word: clipPromptText(card.word, 40),
+      partOfSpeech: clipPromptText(card.partOfSpeech, 20),
+      meaning: clipPromptText(card.meaning, PROMPT_VOCAB_MEANING_LIMIT),
+      example: clipPromptText(card.example, PROMPT_VOCAB_EXAMPLE_LIMIT),
+      translation: clipPromptText(card.translation, PROMPT_VOCAB_EXAMPLE_LIMIT),
+    })),
+    ielts: {
+      listening: clipPromptText(textContent.ielts?.listening, PROMPT_IELTS_LIMIT),
+      speaking: clipPromptText(textContent.ielts?.speaking, PROMPT_IELTS_LIMIT),
+      reading: clipPromptText(textContent.ielts?.reading, PROMPT_IELTS_LIMIT),
+      writing: clipPromptText(textContent.ielts?.writing, PROMPT_IELTS_LIMIT),
+    },
+  };
 }
 
 function buildUserPrompt(params: ExplanationSkillParams) {
-  const outputContract = buildJsonOutputContract(params.regenerationTarget);
   const imageModules = getPromptImageModules(params);
 
-  const lines = [
-    "Important clarification: the skill rule about avoiding special symbols applies only to the natural-language article text fields, not to the JSON wrapper itself.",
-    "The final response must be valid JSON, so all required JSON punctuation must be preserved.",
-    "If the no-symbol writing rule conflicts with valid JSON output, valid JSON takes priority.",
-    ...outputContract,
-    "Do not include markdown code fences, comments, or extra keys.",
-    `Every display line must stay within ${SENTENCE_EXPLANATION_MAX_LINE_LENGTH} characters after whitespace is removed and sentence-ending punctuation is ignored.`,
-    "All explanation text must be arrayized.",
-    "Each array item represents exactly one displayed explanation line, one TTS segment, and one subtitle segment.",
-    "Do not merge multiple explanation lines into one string item, and do not return paragraph-only content without line arrays.",
-    "Place line breaks at punctuation marks, pause positions, or other natural phrasing boundaries whenever possible.",
-    "Keep sentence-ending punctuation in the article display lines when it belongs to the end of the sentence.",
-    "Vocabulary section rule: cover every item from textContent.vocabulary.",
-    "For each vocabulary item, explicitly include the word, partOfSpeech, meaning, example sentence, and the Chinese translation of that example sentence.",
-    "Do not explain phonetic symbols and do not write phrases such as 音标是, 发音是, 读作, or 念作. TTS will read the word itself.",
-  ];
-
-  if (!params.regenerationTarget) {
-    lines.push(
-      "Generate the complete sentence explanation article.",
-      "Each section explanation must be anchored to its corresponding image and use that image to explain the user's original English sentence.",
-      "The introduction and conclusion must also include line arrays for TTS and subtitles.",
-      "Follow the ordered module sequence exactly.",
-      ...params.orderedModules.map(
-        (moduleId, index) => `${index + 1}. ${sentenceExplanationModuleLabels[moduleId]} (${moduleId})`,
-      ),
-    );
-  } else {
-    lines.push(
-      `Task mode: partial regeneration for ${getTargetLabel(params.regenerationTarget)}.`,
-      "Regenerate only the requested block.",
-      "Keep the style, tone, and continuity aligned with the current full article.",
-      "The server will merge your regenerated block back into the current article, so untouched blocks must not be rewritten.",
-    );
-
-    if (params.regenerationTarget.type === "section") {
-      lines.push(
-        `Only regenerate the section for moduleId ${params.regenerationTarget.moduleId}.`,
-        "Use the attached target image to explain that specific module.",
-      );
-    } else if (params.regenerationTarget.type === "introduction") {
-      lines.push(
-        "Regenerate the opening block, including welcomeMessage and introduction.",
-        "The opening should frame the lesson naturally and connect to the original sentence and upcoming image sequence.",
-      );
-    } else {
-      lines.push(
-        "Regenerate only the closing block.",
-        "The conclusion should wrap up the lesson naturally without rewriting earlier sections.",
-      );
-    }
-  }
+  const lines = [] as string[];
 
   lines.push(
+    "请根据以下输入数据生成句子讲解文章：",
     "",
-    "Structured input:",
-    JSON.stringify(
-      {
-        originalSentence: params.originalSentence,
-        bookName: params.bookName,
-        author: params.author,
-        textContent: params.textContent,
-        orderedModules: params.orderedModules,
-        regenerationTarget: params.regenerationTarget ?? null,
-        currentArticle: params.currentArticle ?? null,
-        imageModules,
-      },
-      null,
-      2,
-    ),
+    "## 输入数据",
+    "",
+    JSON.stringify({
+      originalSentence: clipPromptText(params.originalSentence, 900),
+      bookName: clipPromptText(params.bookName, 80),
+      author: clipPromptText(params.author, 80),
+      textContent: summarizeTextContentForPrompt(params.textContent),
+      orderedModules: params.orderedModules,
+      regenerationTarget: params.regenerationTarget ?? null,
+      imageModules,
+    }, null, 2),
   );
+
+  if (params.regenerationTarget) {
+    lines.push(
+      "",
+      "## 注意",
+      `这是局部重生成任务，只重新生成"${getTargetLabel(params.regenerationTarget)}"部分。`,
+      "严格按照 SKILL.md 中的局部重生成规则输出，只包含必要的字段。",
+    );
+  }
 
   return lines.join("\n");
 }
@@ -325,6 +356,38 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function getDetailedErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  const cause =
+    error.cause instanceof Error
+      ? error.cause.message
+      : typeof error.cause === "string"
+        ? error.cause
+        : "";
+
+  return [error.message, cause].filter(Boolean).join(": ");
+}
+
+function humanizeSentenceExplanationError(message: string) {
+  if (/only available for coding agents/i.test(message)) {
+    return "当前仍在用错误协议访问 Kimi Code。请使用 ANTHROPIC_BASE_URL=https://api.kimi.com/coding/ 和 ANTHROPIC_API_KEY。";
+  }
+  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(message)) {
+    return "无法连接到 Kimi 域名，请检查本机网络、DNS 或代理设置。";
+  }
+  if (/other side closed|socketerror/i.test(message)) {
+    return "Kimi 端点主动断开了句子讲解请求，通常是提示词过长或请求体过大。";
+  }
+  if (/aborted|timeout/i.test(message)) {
+    return "句子讲解模型请求超时，请稍后重试。";
+  }
+
+  return message;
+}
+
 export async function loadRemoteImageSource(
   source: string,
   timeoutMs = DEFAULT_REMOTE_IMAGE_TIMEOUT_MS,
@@ -352,97 +415,9 @@ export async function loadRemoteImageSource(
   }
 }
 
-async function normalizeImageSource(source: string, remoteImageTimeoutMs = DEFAULT_REMOTE_IMAGE_TIMEOUT_MS) {
-  if (source.startsWith("data:")) {
-    return parseDataUrl(source);
-  }
-
-  if (source.startsWith("http://") || source.startsWith("https://")) {
-    return loadRemoteImageSource(source, remoteImageTimeoutMs);
-  }
-
-  throw new Error("Unsupported image source for sentence explanation.");
-}
-
-async function buildAnthropicContent(params: ExplanationSkillParams) {
-  const content: Array<Record<string, unknown>> = [{ type: "text", text: buildUserPrompt(params) }];
-  const moduleIds = getPromptImageModules(params);
-  const resolvedImages = await Promise.all(
-    moduleIds.map(async (moduleId) => {
-      const source = params.images[moduleId];
-      if (!source) {
-        return null;
-      }
-
-      try {
-        const image = await normalizeImageSource(source);
-        return { moduleId, image };
-      } catch (error) {
-        throw new Error(
-          `${sentenceExplanationModuleLabels[moduleId]} 图片加载失败：${getErrorMessage(
-            error,
-            "句子讲解图片预处理失败，请稍后重试。",
-          )}`,
-        );
-      }
-    }),
-  );
-
-  for (const resolvedImage of resolvedImages) {
-    if (!resolvedImage) {
-      continue;
-    }
-
-    const { moduleId, image } = resolvedImage;
-    content.push({ type: "text", text: `下面这张图对应模块：${sentenceExplanationModuleLabels[moduleId]} (${moduleId})` });
-    content.push({
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: image.mediaType,
-        data: image.data,
-      },
-    });
-  }
-
-  return content;
-}
-
-function buildOpenAiContent(params: ExplanationSkillParams) {
-  const content: Array<Record<string, unknown>> = [{ type: "text", text: buildUserPrompt(params) }];
-
-  for (const moduleId of getPromptImageModules(params)) {
-    const source = params.images[moduleId];
-    if (!source) {
-      continue;
-    }
-
-    content.push({ type: "text", text: `下面这张图对应模块：${sentenceExplanationModuleLabels[moduleId]} (${moduleId})` });
-    content.push({
-      type: "image_url",
-      image_url: {
-        url: source,
-      },
-    });
-  }
-
-  return content;
-}
-
 function resolveAnthropicMessagesEndpoint(baseUrl: string) {
   const normalized = baseUrl.replace(/\/$/, "");
   return /\/v1$/i.test(normalized) ? `${normalized}/messages` : `${normalized}/v1/messages`;
-}
-
-function buildSystemInstruction(target?: SentenceExplanationRegenerationTarget) {
-  return [
-    "Return JSON only, with no markdown code fence and no extra explanation.",
-    "The no-symbol writing rule applies only to natural-language article text fields, not to JSON punctuation.",
-    ...buildJsonOutputContract(target),
-    `Every display line must stay within ${SENTENCE_EXPLANATION_MAX_LINE_LENGTH} characters after whitespace is removed and sentence-ending punctuation is ignored.`,
-    "All explanation text must be arrayized. Each array item must map to one display line and one TTS segment.",
-    "Keep natural sentence-ending punctuation in display lines.",
-  ].join(" ");
 }
 
 function asRecord(value: unknown) {
@@ -498,32 +473,6 @@ function extractTextFromAnthropicResponse(payload: unknown) {
   return text;
 }
 
-function extractTextFromOpenAiResponse(payload: unknown) {
-  const record = asRecord(payload);
-  const choices = Array.isArray(record.choices) ? record.choices : [];
-  const message = asRecord(asRecord(choices[0]).message);
-  const content = message.content;
-
-  if (typeof content === "string" && content.trim()) {
-    return content.trim();
-  }
-
-  if (Array.isArray(content)) {
-    const text = content
-      .map((item) => asRecord(item))
-      .filter((item) => item.type === "text" && typeof item.text === "string")
-      .map((item) => String(item.text).trim())
-      .filter(Boolean)
-      .join("\n");
-
-    if (text) {
-      return text;
-    }
-  }
-
-  throw new Error("OpenAI 句子讲解接口返回内容为空。");
-}
-
 function extractProviderError(payload: unknown, rawText: string, status: number) {
   const record = asRecord(payload);
   const error = asRecord(record.error);
@@ -559,8 +508,9 @@ async function requestWithRetry(
 
       return extractText(payload);
     } catch (error) {
-      lastError = error instanceof Error ? error.message : "句子讲解请求失败。";
-      lastError = getErrorMessage(error, "句子讲解模型请求超时，请稍后重试。");
+      lastError = isAbortError(error)
+        ? "句子讲解模型请求超时，请稍后重试。"
+        : humanizeSentenceExplanationError(getDetailedErrorMessage(error) || "句子讲解请求失败。");
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
         continue;
@@ -573,28 +523,42 @@ async function requestWithRetry(
   throw new Error(lastError);
 }
 
-async function callAnthropicSkill(
+/**
+ * 核心：调用 LLM 模拟 Claude Code 使用 skill
+ * 关键改进：使用 SKILL.md 作为 system prompt，让 LLM 扮演 Claude Code 执行 skill
+ */
+async function callSkillViaLLM(
   params: ExplanationSkillParams,
   env: SentenceExplanationEnv,
   model: string,
   timeoutMs: number,
   maxRetries: number,
-) {
+): Promise<string> {
   const endpoint = resolveAnthropicMessagesEndpoint(resolveBaseUrl(env, "anthropic"));
   const apiKey = resolveApiKey(env, "anthropic");
-  const systemPrompt = await loadSkillPrompt();
+
+  // 关键：加载 SKILL.md 作为 skill 指令
+  const skillPrompt = loadSkillPrompt();
+
+  // 构建模拟 Claude Code 的 system prompt
+  const systemPrompt = buildSimulatedClaudeCodeSystemPrompt(skillPrompt, params.regenerationTarget);
+
   const body = {
     model,
     max_tokens: DEFAULT_OUTPUT_MAX_TOKENS,
     temperature: 0.4,
-    system: `${systemPrompt}\n\n${buildSystemInstruction(params.regenerationTarget)}`,
+    system: systemPrompt,
     messages: [
       {
         role: "user",
-        content: await buildAnthropicContent(params),
+        content: buildUserPrompt(params),
       },
     ],
   };
+
+  console.log("[Skill Shim] Calling LLM with simulated Claude Code skill execution");
+  console.log(`[Skill Shim] System prompt length: ${systemPrompt.length} chars`);
+  console.log(`[Skill Shim] User prompt length: ${body.messages[0].content.length} chars`);
 
   return requestWithRetry(
     endpoint,
@@ -614,79 +578,18 @@ async function callAnthropicSkill(
   );
 }
 
-async function callOpenAiSkill(
-  params: ExplanationSkillParams,
-  env: SentenceExplanationEnv,
-  model: string,
-  timeoutMs: number,
-  maxRetries: number,
-) {
-  const endpoint = `${resolveBaseUrl(env, "openai").replace(/\/$/, "")}/chat/completions`;
-  const apiKey = resolveApiKey(env, "openai");
-  const systemPrompt = await loadSkillPrompt();
-  const body = {
-    model,
-    max_tokens: DEFAULT_OUTPUT_MAX_TOKENS,
-    temperature: 0.4,
-    messages: [
-      {
-        role: "system",
-        content: `${systemPrompt}\n\n${buildSystemInstruction(params.regenerationTarget)}`,
-      },
-      {
-        role: "user",
-        content: buildOpenAiContent(params),
-      },
-    ],
-  };
-
-  return requestWithRetry(
-    endpoint,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    },
-    timeoutMs,
-    maxRetries,
-    extractTextFromOpenAiResponse,
-    "OpenAI 句子讲解接口调用失败",
-  );
-}
-
 function hasProviderCredentials(env: SentenceExplanationEnv, provider: Provider) {
   return Boolean(resolveApiKey(env, provider) && resolveBaseUrl(env, provider));
 }
 
 function resolveProviderAttempts(env: SentenceExplanationEnv): Provider[] {
-  const preferred = resolveProvider(env);
-  const alternate: Provider = preferred === "anthropic" ? "openai" : "anthropic";
   const attempts: Provider[] = [];
 
-  if (hasProviderCredentials(env, preferred)) {
-    attempts.push(preferred);
-  }
-  if (hasProviderCredentials(env, alternate)) {
-    attempts.push(alternate);
+  if (hasProviderCredentials(env, "anthropic")) {
+    attempts.push("anthropic");
   }
 
   return attempts;
-}
-
-async function callProviderSkill(
-  provider: Provider,
-  params: ExplanationSkillParams,
-  env: SentenceExplanationEnv,
-  model: string,
-  timeoutMs: number,
-  maxRetries: number,
-) {
-  return provider === "anthropic"
-    ? callAnthropicSkill(params, env, model, timeoutMs, maxRetries)
-    : callOpenAiSkill(params, env, model, timeoutMs, maxRetries);
 }
 
 function previewRawOutput(raw: string) {
@@ -744,7 +647,7 @@ function ensureCompleteArticle(article: SentenceExplanationArticle, orderedModul
   const missingParts = collectMissingArticleParts(article, orderedModules);
   if (missingParts.length) {
     throw new Error(
-      `句子讲解 skill 返回了不完整的文章内容，缺少：${missingParts.join("、")}。这通常说明 skill 输出格式与当前解析器不一致。`,
+      `句子讲解 skill 返回了不完整的文章内容，缺少：${missingParts.join("。")}。这通常说明 skill 输出格式与当前解析器不一致。`,
     );
   }
 
@@ -841,7 +744,7 @@ function extractSectionEntries(article: Record<string, unknown>) {
 function stripMarkdownDecorations(value: string) {
   return value
     .replace(/\*\*(.+?)\*\*/g, "$1")
-    .replace(/^[\-\*\u2022]\s*/gm, "")
+    .replace(/^[-*\u2022]\s*/gm, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -899,16 +802,18 @@ function buildVocabularyItemLines(
   item: ExplanationSkillParams["textContent"]["vocabulary"][number],
   index: number,
 ) {
-  /* return normalizeSentenceExplanationLines([
-    `第${index + 1}个词是 ${item.word}，它是${item.partOfSpeech}，意思是${item.meaning}。`,
-    `例句是 ${item.example}`,
-    `这句例句的中文意思是 ${item.translation}`,
-  ]); */
   return normalizeSentenceExplanationLines([
-    `\u7b2c${index + 1}\u4e2a\u8bcd\u662f ${item.word}\uff0c\u8bcd\u6027\u662f ${item.partOfSpeech}\uff0c\u610f\u601d\u662f ${item.meaning}\u3002`,
-    `\u4f8b\u53e5\u662f ${item.example}`,
-    `\u8fd9\u53e5\u4f8b\u53e5\u7684\u4e2d\u6587\u7ffb\u8bd1\u662f ${item.translation}`,
+    `第${index + 1}个词是 ${item.word}，词性是 ${item.partOfSpeech}，意思是 ${item.meaning}。`,
+    `例句是 ${item.example}`,
+    `这句例句的中文翻译是 ${item.translation}`,
   ]);
+}
+
+function countStructuredVocabularyEntries(lines: string[]) {
+  return lines.reduce((count, line) => {
+    const normalized = stripMarkdownDecorations(line);
+    return /第\s*[0-9一二三四五六七八九十]+\s*个词/u.test(normalized) ? count + 1 : count;
+  }, 0);
 }
 
 function repairVocabularySection(
@@ -920,6 +825,23 @@ function repairVocabularySection(
   );
   const seedLines = baseLines.length ? baseLines : normalizeSentenceExplanationLines(["然后看词汇解析图。"]);
   const sectionText = seedLines.join("\n");
+  const structuredEntryCount = countStructuredVocabularyEntries(seedLines);
+  const coveredWordCount = params.textContent.vocabulary.filter((item) =>
+    containsComparableText(sectionText, item.word),
+  ).length;
+
+  if (
+    params.textContent.vocabulary.length > 0 &&
+    structuredEntryCount >= params.textContent.vocabulary.length &&
+    coveredWordCount >= params.textContent.vocabulary.length
+  ) {
+    return {
+      ...section,
+      content: joinSentenceExplanationLines(seedLines),
+      lines: seedLines,
+    };
+  }
+
   const missingLines = params.textContent.vocabulary.flatMap((item, index) => {
     const isCovered =
       containsComparableText(sectionText, item.word) &&
@@ -1144,8 +1066,24 @@ export function parseArticle(raw: string): SentenceExplanationArticle {
     Boolean(parsed.conclusionLines.length) ||
     parsed.sections.some((section) => Boolean(section.lines?.length));
 
+  // 如果没有有意义的内容，返回一个空的文章对象，让后续逻辑使用 fallback 生成
+  // 而不是直接抛出错误
   if (!hasMeaningfulContent) {
-    throw new Error("句子讲解 skill 返回了空文章内容，通常是 skill 输出格式与当前解析器不一致。");
+    return {
+      title: parsed.title || "",
+      welcomeMessage: "",
+      introduction: "",
+      introductionLines: [],
+      sections: parsed.sections.map((section) => ({
+        ...section,
+        content: "",
+        lines: [],
+      })),
+      conclusion: "",
+      conclusionLines: [],
+      totalWordCount: 0,
+      totalLineCount: 0,
+    };
   }
 
   return parsed;
@@ -1240,6 +1178,10 @@ function mergeRegeneratedBlock(
   }
 }
 
+/**
+ * 运行 english-sentence-explanation skill
+ * 核心改进：使用 SKILL.md 作为 prompt，让 LLM 模拟 Claude Code 调用 skill
+ */
 async function runSentenceExplanationSkill(
   params: ExplanationSkillParams,
   env: SentenceExplanationEnv,
@@ -1247,11 +1189,11 @@ async function runSentenceExplanationSkill(
   validateSkillParams(params, env);
 
   const timeoutMs = resolvePositiveInteger(
-    env.ANTHROPIC_HTTP_TIMEOUT_MS || env.OPENAI_HTTP_TIMEOUT_MS,
+    env.ANTHROPIC_HTTP_TIMEOUT_MS,
     DEFAULT_TIMEOUT_MS,
   );
   const maxRetries = resolvePositiveInteger(
-    env.ANTHROPIC_HTTP_MAX_RETRIES || env.OPENAI_HTTP_MAX_RETRIES,
+    env.ANTHROPIC_HTTP_MAX_RETRIES,
     DEFAULT_MAX_RETRIES,
   );
   const attemptErrors: string[] = [];
@@ -1265,11 +1207,13 @@ async function runSentenceExplanationSkill(
     const model = resolveModel(env, provider);
 
     try {
-      const raw = await callProviderSkill(provider, params, env, model, timeoutMs, maxRetries);
+      // 关键：通过 LLM 调用 skill，传入 SKILL.md 作为 system prompt
+      const raw = await callSkillViaLLM(params, env, model, timeoutMs, maxRetries);
+
       if (hasRegenerationTarget(params)) {
         return {
           article: mergeRegeneratedBlock(params.currentArticle, parseRegeneratedBlock(raw, params.regenerationTarget)),
-          source: provider === "anthropic" ? "anthropic-compatible-api" : "openai-compatible-api",
+          source: "anthropic-compatible-api",
           model,
         };
       }
@@ -1279,7 +1223,7 @@ async function runSentenceExplanationSkill(
       if (!missingParts.length) {
         return {
           article: parsedArticle,
-          source: provider === "anthropic" ? "anthropic-compatible-api" : "openai-compatible-api",
+          source: "anthropic-compatible-api",
           model,
         };
       }
@@ -1288,14 +1232,14 @@ async function runSentenceExplanationSkill(
       if (!bestEffortResult || missingParts.length < bestEffortResult.missingPartCount) {
         bestEffortResult = {
           article: bestEffortArticle,
-          source: provider === "anthropic" ? "anthropic-compatible-api" : "openai-compatible-api",
+          source: "anthropic-compatible-api",
           model,
           missingPartCount: missingParts.length,
         };
       }
 
       throw new Error(
-        `句子讲解 skill 返回了不完整的文章内容，缺少：${missingParts.join("、")}。这通常说明 skill 输出格式与当前解析器不一致。`,
+        `句子讲解 skill 返回了不完整的文章内容，缺少：${missingParts.join("。")}。这通常说明 skill 输出格式与当前解析器不一致。`,
       );
     } catch (error) {
       attemptErrors.push(`${provider}:${model}: ${getErrorMessage(error, "句子讲解生成失败。")}`);
@@ -1323,4 +1267,5 @@ export function installEnglishSentenceExplanationSkillShim(env: SentenceExplanat
   );
 
   shimInstalled = true;
+  console.log("[Skill Shim] english-sentence-explanation skill installed (using SKILL.md as prompt)");
 }

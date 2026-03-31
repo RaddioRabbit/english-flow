@@ -22,6 +22,7 @@ import {
 import {
   saveSentenceExplanationVideo,
   syncSentenceExplanationVideoToSupabase,
+  type SentenceExplanationVideoAsset,
   useHydratedTask,
 } from "@/lib/task-store";
 import { isSupabaseConfigured } from "@/lib/supabase-image-store";
@@ -37,6 +38,7 @@ interface VideoLogEntry {
 }
 
 interface VideoPayload {
+  assetId: string;
   objectUrl: string;
   fileName: string;
   durationSeconds: number;
@@ -104,6 +106,14 @@ function createLogEntry(text: string, tone: LogTone = "info"): VideoLogEntry {
   };
 }
 
+function createVideoAssetId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `sentence-explanation-video-${crypto.randomUUID()}`;
+  }
+
+  return `sentence-explanation-video-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function getLogToneClass(tone: LogTone) {
   switch (tone) {
     case "success":
@@ -152,6 +162,23 @@ function downloadSrtSubtitleTrack(subtitleTrack: SentenceExplanationVideoSubtitl
   URL.revokeObjectURL(srtUrl);
 }
 
+function buildPersistedVideoSource(video: SentenceExplanationVideoAsset | null | undefined) {
+  if (!video) {
+    return "";
+  }
+
+  if (video.dataUrl) {
+    return video.dataUrl;
+  }
+
+  if (!video.publicUrl) {
+    return "";
+  }
+
+  const cacheBustToken = encodeURIComponent(`${video.id}:${video.createdAt}`);
+  return `${video.publicUrl}${video.publicUrl.includes("?") ? "&" : "?"}v=${cacheBustToken}`;
+}
+
 function blobToDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -180,7 +207,7 @@ export default function SentenceExplanationVideoPage() {
   const tts = task?.sentenceExplanation?.tts ?? null;
   const persistedVideo = task?.sentenceExplanation?.video ?? null;
   const hasPersistedVideo = Boolean(persistedVideo);
-  const persistedVideoSource = persistedVideo?.dataUrl || persistedVideo?.publicUrl || "";
+  const persistedVideoSource = buildPersistedVideoSource(persistedVideo);
 
   const planState = useMemo(() => {
     if (!task || !article || !tts) {
@@ -350,28 +377,44 @@ export default function SentenceExplanationVideoPage() {
     }
 
     setCurrentSubtitleText("");
-    const videoSource = persistedVideo.dataUrl || persistedVideo.publicUrl || "";
+    const videoSource = buildPersistedVideoSource(persistedVideo);
     const lastClip = planState.plan?.clips[planState.plan.clips.length - 1];
 
     setLogs([
       createLogEntry(videoSource ? "已读取历史视频记录，可直接预览或下载。" : "正在加载历史视频文件...", videoSource ? "success" : "info"),
     ]);
-    setGenerationState({
-      status: videoSource ? "done" : "idle",
-      progress: videoSource ? 100 : 0,
-      message: videoSource ? "视频生成已完成。" : "正在加载历史视频...",
-      currentClipIndex: videoSource ? planState.plan?.clips.length ?? 0 : 0,
-      currentModuleName: videoSource ? lastClip?.moduleName || "" : "",
-      currentImageSrc: videoSource ? lastClip?.imageSrc || "" : "",
-      error: "",
-      payload: videoSource
-        ? {
-            objectUrl: videoSource,
-            fileName: persistedVideo.fileName,
-            durationSeconds: persistedVideo.durationSeconds,
-            subtitleTrack: persistedVideo.subtitleTrack,
-          }
-        : null,
+    setGenerationState((current) => {
+      const shouldPreserveFreshBlob =
+        current.payload?.assetId === persistedVideo.id && current.payload.objectUrl.startsWith("blob:");
+      const payload =
+        shouldPreserveFreshBlob && current.payload
+          ? {
+              ...current.payload,
+              assetId: persistedVideo.id,
+              fileName: persistedVideo.fileName,
+              durationSeconds: persistedVideo.durationSeconds,
+              subtitleTrack: persistedVideo.subtitleTrack ?? current.payload.subtitleTrack,
+            }
+          : videoSource
+            ? {
+                assetId: persistedVideo.id,
+                objectUrl: videoSource,
+                fileName: persistedVideo.fileName,
+                durationSeconds: persistedVideo.durationSeconds,
+                subtitleTrack: persistedVideo.subtitleTrack,
+              }
+            : null;
+
+      return {
+        status: payload ? "done" : "idle",
+        progress: payload ? 100 : 0,
+        message: payload ? "视频生成已完成。" : "正在加载历史视频...",
+        currentClipIndex: payload ? planState.plan?.clips.length ?? 0 : 0,
+        currentModuleName: payload ? lastClip?.moduleName || "" : "",
+        currentImageSrc: payload ? lastClip?.imageSrc || "" : "",
+        error: "",
+        payload,
+      };
     });
   }, [persistedVideo, planState.plan]);
 
@@ -518,6 +561,7 @@ export default function SentenceExplanationVideoPage() {
     ]);
 
     try {
+      const nextVideoAssetId = createVideoAssetId();
       const result = await exportSentenceExplanationVideoMp4({
         task,
         article,
@@ -534,7 +578,7 @@ export default function SentenceExplanationVideoPage() {
       const dataUrl = await blobToDataUrl(result.blob);
 
       const syncResult = await saveSentenceExplanationVideo(task.id, {
-        id: task.sentenceExplanation?.video?.id || "",
+        id: nextVideoAssetId,
         fileName: result.fileName,
         mimeType: result.mimeType,
         dataUrl,
@@ -557,6 +601,7 @@ export default function SentenceExplanationVideoPage() {
         currentImageSrc: lastClip?.imageSrc || "",
         error: "",
         payload: {
+          assetId: nextVideoAssetId,
           objectUrl: result.objectUrl,
           fileName: result.fileName,
           durationSeconds: result.durationSeconds,
@@ -572,6 +617,13 @@ export default function SentenceExplanationVideoPage() {
       }
 
       const message = error instanceof Error ? error.message : "视频生成失败，请稍后重试。";
+
+      // Check for localStorage quota exceeded error
+      const isQuotaError =
+        message.includes("exceeded the quota") ||
+        message.includes("QuotaExceededError") ||
+        (error instanceof DOMException && error.name === "QuotaExceededError");
+
       setCurrentSubtitleText("");
       setGenerationState((current) => ({
         ...current,
@@ -579,7 +631,13 @@ export default function SentenceExplanationVideoPage() {
         error: message,
         message,
       }));
-      appendLog(message, "error");
+
+      if (isQuotaError) {
+        appendLog("浏览器存储空间不足。系统已自动清理旧任务数据，请尝试重新生成视频。", "error");
+        appendLog("提示：可以在「历史记录」页面删除不需要的旧任务来释放空间。", "info");
+      } else {
+        appendLog(message, "error");
+      }
     }
   }, [appendLog, article, handleProgress, planState.plan, selectedFontLabel, subtitleStyle, task, tts]);
 
@@ -643,16 +701,24 @@ export default function SentenceExplanationVideoPage() {
     );
   }
 
-  const displayPayload =
-    generationState.payload ??
-    (persistedVideoSource
+  // 当正在生成新视频时，强制显示生成状态而不是历史视频
+  // 避免用户看到旧视频误以为生成完成
+  const isGenerating = generationState.status === "running";
+  const hasNewPayload = generationState.payload != null;
+
+  const displayPayload = isGenerating && !hasNewPayload
+    ? null // 生成中但还没有新视频时，不显示任何视频
+    : (hasNewPayload
+      ? generationState.payload
+      : (persistedVideoSource
       ? {
-          objectUrl: persistedVideoSource,
-          fileName: persistedVideo?.fileName || "sentence-explanation-video.mp4",
-          durationSeconds: persistedVideo?.durationSeconds || 0,
-          subtitleTrack: persistedVideo?.subtitleTrack,
-        }
-      : null);
+            assetId: persistedVideo?.id || "",
+            objectUrl: persistedVideoSource,
+            fileName: persistedVideo?.fileName || "sentence-explanation-video.mp4",
+            durationSeconds: persistedVideo?.durationSeconds || 0,
+            subtitleTrack: persistedVideo?.subtitleTrack,
+          }
+        : null));
   const initialClip = planState.plan?.clips[0] ?? null;
   const displayModuleName = generationState.currentModuleName || initialClip?.moduleName || (hasPersistedVideo ? "历史视频" : "");
   const displayImageSrc = generationState.currentImageSrc || initialClip?.imageSrc || "";
@@ -688,9 +754,6 @@ export default function SentenceExplanationVideoPage() {
                 sentence-explanation-video skill
               </div>
               <h1 className="mt-4 font-display text-3xl font-bold text-foreground">句子讲解视频生成页面</h1>
-              <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                页面会模拟 Claude Code 调用 `sentence-explanation-video` skill 的过程，按固定顺序播放五张解析图，并同步导出最终视频。
-              </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -903,10 +966,7 @@ export default function SentenceExplanationVideoPage() {
           <div className="mt-8 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
             <section className="rounded-3xl border border-slate-700 bg-slate-950 p-5 shadow-lg">
               <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-4">
-                <div>
-                  <p className="font-mono text-sm text-slate-100">Claude Code / Terminal</p>
-                  <p className="mt-1 text-xs text-slate-400">正在模拟 skill 调用和视频编排过程</p>
-                </div>
+                <div aria-hidden="true" />
                 {generationState.status === "running" ? (
                   <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
                     <LoadingDots />
@@ -1047,7 +1107,7 @@ export default function SentenceExplanationVideoPage() {
                   <video
                     controls
                     preload="metadata"
-                    key={`${displayPayload.objectUrl}:${subtitleTrackPreviewUrl}`}
+                    key={`video-${taskId}-${generationState.status}-${displayPayload.objectUrl.slice(-20)}`}
                     className="mt-4 aspect-[3/4] w-full rounded-2xl border border-border bg-black"
                     src={displayPayload.objectUrl}
                   >

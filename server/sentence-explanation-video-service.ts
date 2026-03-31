@@ -213,9 +213,63 @@ async function writeMediaSourceToFile(directory: string, fileName: string, media
   return filePath;
 }
 
+async function getAudioDuration(audioFile: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const ffmpegPath = ffmpegStatic || process.env.FFMPEG_BIN;
+    if (!ffmpegPath) {
+      reject(new Error("Missing ffmpeg binary."));
+      return;
+    }
+
+    const child = spawn(ffmpegPath, ["-i", audioFile], {
+      windowsHide: true,
+    });
+
+    let stderr = "";
+
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+
+    child.on("error", reject);
+    child.on("close", () => {
+      // FFmpeg outputs duration info to stderr
+      const durationMatch = /Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/.exec(stderr);
+      if (durationMatch) {
+        const hours = Number.parseInt(durationMatch[1], 10);
+        const minutes = Number.parseInt(durationMatch[2], 10);
+        const seconds = Number.parseFloat(durationMatch[3]);
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+        resolve(totalSeconds);
+        return;
+      }
+
+      // If we can't parse duration, reject with error
+      reject(new Error("Failed to get audio duration from ffmpeg output."));
+    });
+  });
+}
+
 async function concatAudioFiles(directory: string, clipIndex: number, audioFiles: string[]) {
+  const outputPath = join(directory, `clip-${clipIndex + 1}-audio.m4a`);
+
   if (audioFiles.length === 1) {
-    return audioFiles[0];
+    await runFfmpeg([
+      "-y",
+      "-i",
+      audioFiles[0],
+      "-vn",
+      "-c:a",
+      "aac",
+      "-b:a",
+      FINAL_AUDIO_BITRATE,
+      "-ar",
+      "44100",
+      "-ac",
+      "2",
+      outputPath,
+    ]);
+    return outputPath;
   }
 
   const concatListPath = join(directory, `clip-${clipIndex + 1}-audio-list.txt`);
@@ -225,7 +279,6 @@ async function concatAudioFiles(directory: string, clipIndex: number, audioFiles
     "utf8",
   );
 
-  const outputPath = join(directory, `clip-${clipIndex + 1}-audio.mp3`);
   await runFfmpeg([
     "-y",
     "-f",
@@ -234,8 +287,15 @@ async function concatAudioFiles(directory: string, clipIndex: number, audioFiles
     "0",
     "-i",
     concatListPath,
-    "-c",
-    "copy",
+    "-vn",
+    "-c:a",
+    "aac",
+    "-b:a",
+    FINAL_AUDIO_BITRATE,
+    "-ar",
+    "44100",
+    "-ac",
+    "2",
     outputPath,
   ]);
 
@@ -459,7 +519,8 @@ async function createClipVideo(
   clipIndex: number,
   imageFile: string,
   audioFile: string,
-  durationSeconds: number,
+  requestedDuration: number,
+  actualDuration: number,
   moduleId: SentenceExplanationVideoRequest["clips"][number]["moduleId"],
   moduleName: string,
   subtitles: SentenceExplanationVideoRequest["clips"][number]["subtitles"],
@@ -473,18 +534,28 @@ async function createClipVideo(
     "format=yuv420p",
   ];
 
-  if (!durationSeconds) {
+  if (!requestedDuration) {
     throw new Error(`Clip ${clipIndex + 1} has an invalid duration.`);
   }
 
+  // 根据实际音频时长调整字幕时间
+  const durationRatio = actualDuration / requestedDuration;
+
   if (subtitles?.length) {
+    const adjustedSubtitles = subtitles.map((sub) => ({
+      ...sub,
+      startSeconds: sub.startSeconds * durationRatio,
+      endSeconds: sub.endSeconds * durationRatio,
+      durationSeconds: sub.durationSeconds * durationRatio,
+    }));
+
     const subtitleDocument = buildClipSubtitleJsonDocument(clipIndex, {
       moduleId,
       moduleName,
       imageDataUrl: imageFile,
-      durationSeconds,
+      durationSeconds: actualDuration,
       audioSegments: [],
-      subtitles,
+      subtitles: adjustedSubtitles,
     });
     const subtitleArtifacts = await prepareClipSubtitleArtifacts(directory, subtitleDocument);
     subtitleArtifacts?.textFiles.forEach((textFileName, index) => {
@@ -526,8 +597,6 @@ async function createClipVideo(
       FINAL_AUDIO_BITRATE,
       "-pix_fmt",
       "yuv420p",
-      "-t",
-      durationSeconds.toFixed(3),
       "-movflags",
       "+faststart",
       "-shortest",
@@ -556,8 +625,16 @@ async function concatClipVideos(directory: string, clipVideos: string[]) {
     "0",
     "-i",
     concatListPath,
-    "-c",
-    "copy",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-c:a",
+    "aac",
+    "-b:a",
+    FINAL_AUDIO_BITRATE,
+    "-pix_fmt",
+    "yuv420p",
     "-movflags",
     "+faststart",
     outputPath,
@@ -577,6 +654,91 @@ async function copySelectedFontToDirectory(directory: string, fontFileName?: str
   return basename(targetPath);
 }
 
+interface ClipActualDuration {
+  clipIndex: number;
+  requestedDuration: number;
+  actualDuration: number;
+}
+
+function buildVideoSubtitleJsonDocumentWithActualDurations(
+  input: SentenceExplanationVideoRequest,
+  actualDurations: ClipActualDuration[],
+): VideoSubtitleJsonDocument {
+  const clips = input.clips.map((clip, clipIndex) => {
+    const actualDuration = actualDurations.find((d) => d.clipIndex === clipIndex);
+    const durationRatio = actualDuration ? actualDuration.actualDuration / actualDuration.requestedDuration : 1;
+
+    // 根据实际时长比例调整字幕时间
+    const adjustedSubtitles = (clip.subtitles ?? []).map((sub) => ({
+      ...sub,
+      startSeconds: sub.startSeconds * durationRatio,
+      endSeconds: sub.endSeconds * durationRatio,
+      durationSeconds: sub.durationSeconds * durationRatio,
+    }));
+
+    return buildClipSubtitleJsonDocument(clipIndex, {
+      ...clip,
+      durationSeconds: actualDuration?.actualDuration ?? clip.durationSeconds,
+      subtitles: adjustedSubtitles,
+    });
+  });
+
+  let timelineCursor = 0;
+  const cues: VideoSubtitleJsonCue[] = [];
+
+  clips.forEach((clip) => {
+    clip.lines.forEach((line) => {
+      cues.push({
+        ...line,
+        clipIndex: clip.clipIndex,
+        moduleId: clip.moduleId,
+        moduleName: clip.moduleName,
+        globalStartSeconds: timelineCursor + line.startSeconds,
+        globalEndSeconds: timelineCursor + line.endSeconds,
+      });
+    });
+
+    timelineCursor += clip.durationSeconds;
+  });
+
+  return {
+    taskId: input.taskId,
+    title: input.title,
+    durationSeconds: actualDurations.reduce((total, d) => total + d.actualDuration, 0),
+    clips,
+    cues,
+    srtText: buildSrtText(
+      cues.map((cue) => ({
+        text: cue.text,
+        startSeconds: cue.globalStartSeconds,
+        endSeconds: cue.globalEndSeconds,
+      })),
+    ),
+  };
+}
+
+async function prepareVideoSubtitleArtifactsWithActualDurations(
+  directory: string,
+  input: SentenceExplanationVideoRequest,
+  actualDurations: ClipActualDuration[],
+) {
+  const document = buildVideoSubtitleJsonDocumentWithActualDurations(input, actualDurations);
+  if (!document.cues.length) {
+    return null;
+  }
+
+  const jsonPath = join(directory, "sentence-explanation-subtitles.json");
+  const srtPath = join(directory, "sentence-explanation-subtitles.srt");
+  await writeFile(jsonPath, JSON.stringify(document, null, 2), "utf8");
+  await writeFile(srtPath, document.srtText, "utf8");
+
+  return {
+    document,
+    jsonPath,
+    srtPath,
+  };
+}
+
 export async function generateSentenceExplanationVideoMp4(input: SentenceExplanationVideoRequest) {
   if (!input.taskId?.trim()) {
     throw new Error("Missing task ID. Cannot generate MP4.");
@@ -593,6 +755,7 @@ export async function generateSentenceExplanationVideoMp4(input: SentenceExplana
   try {
     const fontFileName = await copySelectedFontToDirectory(tempDirectory, subtitleStyle.fontFileName);
     const clipVideos: string[] = [];
+    const actualDurations: ClipActualDuration[] = [];
 
     for (let clipIndex = 0; clipIndex < input.clips.length; clipIndex += 1) {
       const clip = input.clips[clipIndex];
@@ -627,6 +790,14 @@ export async function generateSentenceExplanationVideoMp4(input: SentenceExplana
       }
 
       const mergedAudio = await concatAudioFiles(tempDirectory, clipIndex, audioFiles);
+      const actualAudioDuration = await getAudioDuration(mergedAudio);
+
+      actualDurations.push({
+        clipIndex,
+        requestedDuration: clip.durationSeconds,
+        actualDuration: actualAudioDuration,
+      });
+
       clipVideos.push(
         await createClipVideo(
           tempDirectory,
@@ -634,6 +805,7 @@ export async function generateSentenceExplanationVideoMp4(input: SentenceExplana
           imageFile,
           mergedAudio,
           clip.durationSeconds,
+          actualAudioDuration,
           clip.moduleId,
           clip.moduleName,
           clip.subtitles,
@@ -644,7 +816,11 @@ export async function generateSentenceExplanationVideoMp4(input: SentenceExplana
     }
 
     const outputVideoPath = await concatClipVideos(tempDirectory, clipVideos);
-    const videoSubtitleArtifacts = await prepareVideoSubtitleArtifacts(tempDirectory, input);
+    const videoSubtitleArtifacts = await prepareVideoSubtitleArtifactsWithActualDurations(
+      tempDirectory,
+      input,
+      actualDurations,
+    );
     const finalVideoPath = videoSubtitleArtifacts
       ? await muxVideoSubtitleTrack(tempDirectory, outputVideoPath, videoSubtitleArtifacts.srtPath)
       : outputVideoPath;

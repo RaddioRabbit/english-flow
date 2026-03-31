@@ -802,9 +802,76 @@ function writeTasksToLocalStorage(tasks: Task[], emitUpdateEvent = true) {
       textContent: cloneTextContent(task.textContent),
     }),
   );
-  window.localStorage.setItem(TASKS_KEY, JSON.stringify(normalizedTasks.map((task) => serializeTask(task))));
-  if (emitUpdateEvent) {
-    emitTaskUpdate();
+  const serializedTasks = normalizedTasks.map((task) => serializeTask(task));
+  const jsonString = JSON.stringify(serializedTasks);
+
+  // Check localStorage quota before saving
+  const maxLocalStorageSize = 5 * 1024 * 1024; // 5MB typical limit
+  const dataSize = new Blob([jsonString]).size;
+
+  if (dataSize > maxLocalStorageSize * 0.9) {
+    // Over 90% of quota, try to clean up old tasks
+    console.warn(`Task data size (${(dataSize / 1024 / 1024).toFixed(2)}MB) approaching localStorage quota. Attempting cleanup...`);
+
+    // Keep only the most recent tasks
+    const sortedTasks = [...normalizedTasks].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+
+    // Try keeping fewer tasks progressively
+    const targetSizes = [20, 15, 10, 5];
+    for (const targetCount of targetSizes) {
+      const trimmedTasks = sortedTasks.slice(0, targetCount);
+      const trimmedSerialized = trimmedTasks.map((task) => serializeTask(task));
+      const trimmedJson = JSON.stringify(trimmedSerialized);
+      const trimmedSize = new Blob([trimmedJson]).size;
+
+      if (trimmedSize < maxLocalStorageSize * 0.8) {
+        // Under 80% of quota, safe to save
+        try {
+          window.localStorage.setItem(TASKS_KEY, trimmedJson);
+          console.warn(`Reduced task history to ${targetCount} most recent tasks to stay within storage quota.`);
+          if (emitUpdateEvent) {
+            emitTaskUpdate();
+          }
+          return;
+        } catch (e) {
+          // Continue to next attempt
+        }
+      }
+    }
+
+    // If we get here, even 5 tasks is too much - this shouldn't happen but handle it
+    console.error("Unable to save tasks: Storage quota exceeded even with minimal task history.");
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(TASKS_KEY, jsonString);
+    if (emitUpdateEvent) {
+      emitTaskUpdate();
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "QuotaExceededError") {
+      console.error("localStorage quota exceeded. Task data could not be saved.", error);
+      // Try emergency cleanup - keep only last 5 tasks
+      const sortedTasks = [...normalizedTasks].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+      const emergencyTasks = sortedTasks.slice(0, 5);
+      const emergencyJson = JSON.stringify(emergencyTasks.map((task) => serializeTask(task)));
+      try {
+        window.localStorage.setItem(TASKS_KEY, emergencyJson);
+        console.warn("Emergency cleanup: reduced to 5 most recent tasks.");
+        if (emitUpdateEvent) {
+          emitTaskUpdate();
+        }
+      } catch (e) {
+        console.error("Critical: Unable to save even minimal task data.", e);
+      }
+    } else {
+      throw error;
+    }
   }
 }
 
@@ -3681,6 +3748,17 @@ export async function createSentenceExplanationRevisionTask(
   return nextTask;
 }
 
+export async function createSentenceExplanationArticleTask(
+  taskOrId: string | Task,
+  payload: SentenceExplanationResponse,
+) {
+  return createSentenceExplanationRevisionTask(taskOrId, {
+    article: payload,
+    stage: "article",
+    resumeRoute: "explanation",
+  });
+}
+
 export function setTaskResumeRoute(taskId: string, resumeRoute: TaskResumeRoute) {
   updateTask(taskId, (task) => ({
     ...task,
@@ -3738,7 +3816,15 @@ export async function saveSentenceExplanationVideo(
   taskId: string,
   payload: SentenceExplanationVideoAsset,
 ) {
-  const nextPayload = cloneSentenceExplanationVideo(payload);
+  const currentVideoId = loadTasks().find((item) => item.id === taskId)?.sentenceExplanation?.video?.id || "";
+  const nextPayload = cloneSentenceExplanationVideo(
+    currentVideoId && payload.id === currentVideoId
+      ? {
+          ...payload,
+          id: createId("sentence-explanation-video"),
+        }
+      : payload,
+  );
   if (!nextPayload) {
     return { success: false, synced: false, error: "Sentence explanation video payload is invalid." };
   }

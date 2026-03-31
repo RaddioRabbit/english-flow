@@ -83,6 +83,8 @@ const DEFAULT_TTS_ENDPOINTS = [
   "https://api-bj.minimaxi.com/v1/t2a_v2",
 ];
 const MAX_TTS_TEXT_LENGTH = 10_000;
+const LONG_FORM_TTS_SEGMENT_THRESHOLD = 60;
+const LONG_FORM_MIN_CONCURRENCY = 2;
 
 const MODULE_LABELS: Record<ModuleId, string> = {
   translation: sentenceExplanationModuleLabels.translation,
@@ -187,6 +189,14 @@ function resolveRuntimeConfig(env: SentenceExplanationTtsEnv): ResolvedTtsRuntim
       },
     ),
   };
+}
+
+function resolveEffectiveConcurrency(config: ResolvedTtsRuntimeConfig, segmentCount: number) {
+  if (segmentCount < LONG_FORM_TTS_SEGMENT_THRESHOLD) {
+    return config.concurrency;
+  }
+
+  return Math.max(config.concurrency, LONG_FORM_MIN_CONCURRENCY);
 }
 
 function getRequestEndpoints(env: SentenceExplanationTtsEnv) {
@@ -602,13 +612,17 @@ export async function runSentenceExplanationTtsSkill(
   const voice = resolveVoice(language, input.voice);
   const speed = resolveSpeed(input.speed);
   const segments = buildSegments(input);
+  const effectiveConfig = {
+    ...config,
+    concurrency: resolveEffectiveConcurrency(config, segments.length),
+  };
   const { audioBySegment, segmentErrors, pendingSegments } = await synthesizeSegments(
     segments,
     language,
     voice,
     speed,
     env,
-    config,
+    effectiveConfig,
   );
 
   const successfulSegments = Array.from(audioBySegment.values()).filter(Boolean).length;

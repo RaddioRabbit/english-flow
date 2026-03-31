@@ -29,6 +29,32 @@ function buildRequest(): SentenceExplanationTtsRequest {
   };
 }
 
+function buildLongRequest(segmentCount = 72): SentenceExplanationTtsRequest {
+  return {
+    taskId: "task-tts-long",
+    language: "zh",
+    voice: "Chinese (Mandarin)_News_Anchor",
+    article: {
+      title: "Long sentence explanation",
+      welcomeMessage: "Welcome",
+      introduction: "",
+      introductionLines: [],
+      sections: [
+        {
+          moduleId: "translation",
+          moduleName: "Translation",
+          imageRef: "translation",
+          content: "Long form translation",
+          lines: Array.from({ length: segmentCount }, (_, index) => `Long segment ${index + 1}`),
+        },
+      ],
+      conclusion: "",
+      conclusionLines: [],
+      totalWordCount: 0,
+    },
+  };
+}
+
 function buildMiniMaxSuccess(text: string) {
   return {
     ok: true,
@@ -123,6 +149,44 @@ describe("sentence explanation tts skill shim", () => {
 
     const result = await promise;
     expect(result.metadata.successfulSegments).toBe(5);
+  });
+
+  it("bumps very long jobs above serial mode even when the configured concurrency is 1", async () => {
+    const request = buildLongRequest();
+    const startedTexts: string[] = [];
+    let releaseGate = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    const fetchMock = vi.fn(async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { text?: string };
+      const text = body.text || "";
+      startedTexts.push(text);
+
+      if (startedTexts.length <= 2) {
+        await gate;
+      }
+
+      return buildMiniMaxSuccess(text);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = runSentenceExplanationTtsSkill(request, {
+      MINIMAX_API_KEY: "test-key",
+      MINIMAX_BASE_URL: "https://api.minimaxi.com/v1/t2a_v2",
+      SENTENCE_EXPLANATION_TTS_CONCURRENCY: "1",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(startedTexts.length).toBeGreaterThan(1);
+
+    releaseGate();
+
+    const result = await promise;
+    expect(result.metadata.totalSegments).toBe(72);
+    expect(result.metadata.successfulSegments).toBe(72);
   });
 
   it("fails the whole request when any sentence still cannot be synthesized", async () => {

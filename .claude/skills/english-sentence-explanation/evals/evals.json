@@ -3,21 +3,41 @@
   "evals": [
     {
       "id": 1,
-      "name": "经典文学名句讲解",
-      "prompt": "根据以下数据生成英语句子讲解文章：\n原句：It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.\n书名：《傲慢与偏见》\n作者：简·奥斯汀\n\n文本解析：\n- 翻译：凡是有钱的单身汉，总想娶位太太，这已经成了一条举世公认的真理。\n- 情境：19世纪英国乡村社会，讽刺婚姻与金钱的关系，开篇名句奠定全书基调\n- 语法：一般现在时，被动语态，It is + n. + that从句结构\n- 词汇：universally（普遍地），acknowledged（公认的），possession（拥有）\n- 雅思：听力注意universally的发音，口语写作可用It is...that句式表达普遍观点\n\n五张图片已生成好，请输出JSON格式的讲解文章。",
-      "expected_output": "JSON格式的讲解文章，包含welcomeMessage、五个模块的讲解内容，总字数500-600字，语气生动活泼适合高中生"
+      "name": "经典文学名句讲解-完整文章",
+      "prompt": "根据以下数据生成英语句子讲解文章：\n{\n  \"originalSentence\": \"It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.\",\n  \"bookName\": \"《傲慢与偏见》\",\n  \"author\": \"简·奥斯汀\",\n  \"textContent\": {\n    \"translation\": \"凡是有钱的单身汉，总想娶位太太，这已经成了一条举世公认的真理。\",\n    \"prompt1\": \"19世纪英国乡村社会\",\n    \"prompt2\": \"讽刺婚姻与金钱的关系\",\n    \"prompt3\": \"开篇名句奠定全书基调\",\n    \"prompt4\": \"引起读者对社会风俗的思考\",\n    \"grammar\": {\n      \"tense\": \"一般现在时\",\n      \"voice\": \"被动语态\",\n      \"structure\": \"It is + n. + that从句结构\"\n    },\n    \"vocabulary\": [\n      {\n        \"word\": \"universally\",\n        \"phonetic\": \"/ˌjuːnɪˈvɜːsəli/\",\n        \"partOfSpeech\": \"adv.\",\n        \"meaning\": \"普遍地，全体地\",\n        \"example\": \"The theory is universally accepted.\",\n        \"translation\": \"这个理论被普遍接受。\"\n      },\n      {\n        \"word\": \"acknowledged\",\n        \"phonetic\": \"/əkˈnɒlɪdʒd/\",\n        \"partOfSpeech\": \"adj.\",\n        \"meaning\": \"公认的，得到承认的\",\n        \"example\": \"He is the acknowledged expert in this field.\",\n        \"translation\": \"他是这个领域公认的专家。\"\n      },\n      {\n        \"word\": \"possession\",\n        \"phonetic\": \"/pəˈzeʃn/\",\n        \"partOfSpeech\": \"n.\",\n        \"meaning\": \"拥有，财产\",\n        \"example\": \"The ring is my most treasured possession.\",\n        \"translation\": \"这枚戒指是我最珍贵的财产。\"\n      }\n    ],\n    \"ielts\": {\n      \"listening\": \"注意universally的发音，重音在第三音节\",\n      \"speaking\": \"可用It is...that句式表达普遍观点\",\n      \"reading\": \"识别同位语从句that引导的部分\",\n      \"writing\": \"可用此句式引出普遍认同的观点\"\n    }\n  },\n  \"orderedModules\": [\"translation\", \"grammar\", \"summary\", \"vocabulary\", \"ielts\"],\n  \"regenerationTarget\": null\n}",
+      "expected_output": "JSON格式的讲解文章，包含welcomeMessage、introductionLines、五个sections（每个有lines数组）、conclusionLines，每行不超过50字，语气生动活泼适合高中生，总字数800-1000字",
+      "assertions": [
+        {"name": "valid_json", "type": "json_valid"},
+        {"name": "has_welcome_message", "type": "field_exists", "path": "article.welcomeMessage"},
+        {"name": "has_introduction_lines", "type": "field_exists", "path": "article.introductionLines"},
+        {"name": "has_five_sections", "type": "array_length", "path": "article.sections", "expected": 5},
+        {"name": "each_section_has_lines", "type": "custom"},
+        {"name": "no_line_exceeds_50_chars", "type": "custom"},
+        {"name": "has_conclusion_lines", "type": "field_exists", "path": "article.conclusionLines"}
+      ]
     },
     {
       "id": 2,
-      "name": "励志名言讲解",
-      "prompt": "根据以下数据生成英语句子讲解文章：\n原句：The only way to do great work is to love what you do.\n书名：《史蒂夫·乔布斯传》\n作者：沃尔特·艾萨克森\n\n文本解析：\n- 翻译：做伟大的工作的唯一方法就是热爱你所做的事。\n- 情境：乔布斯2005年斯坦福演讲名句，关于人生选择和职业规划\n- 语法：一般现在时，主系表结构，不定式作表语和宾语\n- 词汇：great（伟大的，出色的），唯一（only），热爱（love）\n- 雅思：口语考试可用于谈论career goals，写作可用于work-life balance话题\n\n五张图片已生成好，请输出JSON格式的讲解文章。",
-      "expected_output": "JSON格式的讲解文章，包含完整的五个模块讲解，开头有'欢迎来到英语名著句子讲解小课堂'，语气亲切活泼"
+      "name": "励志名言讲解-无符号检查",
+      "prompt": "根据以下数据生成英语句子讲解文章，注意：\n1. 不要出现引号、括号、斜杠等符号\n2. 每行不超过50字\n3. 词汇讲解不要中文音译\n\n输入数据：\n{\n  \"originalSentence\": \"The only way to do great work is to love what you do.\",\n  \"bookName\": \"《史蒂夫·乔布斯传》\",\n  \"author\": \"沃尔特·艾萨克森\",\n  \"textContent\": {\n    \"translation\": \"做伟大的工作的唯一方法就是热爱你所做的事。\",\n    \"prompt1\": \"乔布斯2005年斯坦福演讲名句\",\n    \"prompt2\": \"关于人生选择和职业规划\",\n    \"prompt3\": \"激励人们追求热爱的事业\",\n    \"prompt4\": \"成功与热情的辩证关系\",\n    \"grammar\": {\n      \"tense\": \"一般现在时\",\n      \"voice\": \"主动语态\",\n      \"structure\": \"主系表结构，不定式作表语和宾语\"\n    },\n    \"vocabulary\": [\n      {\n        \"word\": \"great\",\n        \"phonetic\": \"/ɡreɪt/\",\n        \"partOfSpeech\": \"adj.\",\n        \"meaning\": \"伟大的，出色的\",\n        \"example\": \"She is a great scientist.\",\n        \"translation\": \"她是一位伟大的科学家。\"\n      },\n      {\n        \"word\": \"only\",\n        \"phonetic\": \"/ˈəʊnli/\",\n        \"partOfSpeech\": \"adj.\",\n        \"meaning\": \"唯一的\",\n        \"example\": \"This is the only solution.\",\n        \"translation\": \"这是唯一的解决方案。\"\n      }\n    ],\n    \"ielts\": {\n      \"listening\": \"注意great的元音发音\",\n      \"speaking\": \"可用于谈论career goals\",\n      \"reading\": \"理解不定式结构\",\n      \"writing\": \"可用于work-life balance话题\"\n    }\n  },\n  \"orderedModules\": [\"translation\", \"grammar\", \"summary\", \"vocabulary\", \"ielts\"],\n  \"regenerationTarget\": null\n}",
+      "expected_output": "JSON格式的讲解文章，包含完整的五个模块讲解，开头有'欢迎来到英语名著句子讲解小课堂'，无引号括号斜杠等符号，词汇无中文音译如'发音是XXX'",
+      "assertions": [
+        {"name": "valid_json", "type": "json_valid"},
+        {"name": "no_forbidden_symbols", "type": "custom"},
+        {"name": "no_phonetic_translations", "type": "custom"},
+        {"name": "no_line_exceeds_50_chars", "type": "custom"}
+      ]
     },
     {
       "id": 3,
-      "name": "复杂长句讲解",
-      "prompt": "根据以下数据生成英语句子讲解文章：\n原句：So we beat on, boats against the current, borne back ceaselessly into the past.\n书名：《了不起的盖茨比》\n作者：菲茨杰拉德\n\n文本解析：\n- 翻译：于是我们奋力向前划，逆流向上的小船，不停地被浪潮推回到过去。\n- 情境：小说结尾名句，比喻人生与命运的抗争，美国梦的幻灭\n- 语法：一般现在时，倒装省略结构，比喻修辞，borne是bear的过去分词\n- 词汇：beat on（奋力前行），current（潮流，水流），ceaselessly（不停地），borne（被承载）\n- 雅思：阅读注意倒装结构，写作可用比喻句式增强文采\n\n五张图片已生成好，请输出JSON格式的讲解文章。",
-      "expected_output": "JSON格式的讲解文章，五个模块完整，讲解复杂语法时通俗易懂，适合高中生理解，字数符合要求"
+      "name": "局部重生成-开场",
+      "prompt": "只重新生成开场部分：\n{\n  \"originalSentence\": \"So we beat on, boats against the current, borne back ceaselessly into the past.\",\n  \"bookName\": \"《了不起的盖茨比》\",\n  \"author\": \"菲茨杰拉德\",\n  \"textContent\": {\n    \"translation\": \"于是我们奋力向前划，逆流向上的小船，不停地被浪潮推回到过去。\"\n  },\n  \"regenerationTarget\": {\n    \"type\": \"introduction\"\n  }\n}",
+      "expected_output": "只包含welcomeMessage、introduction、introductionLines的JSON，无sections、conclusion等其他字段",
+      "assertions": [
+        {"name": "valid_json", "type": "json_valid"},
+        {"name": "only_introduction_fields", "type": "custom"},
+        {"name": "has_welcome_message", "type": "field_exists", "path": "article.welcomeMessage"}
+      ]
     }
   ]
 }

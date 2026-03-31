@@ -5,11 +5,6 @@ import { installEnglishSentenceExplanationSkillShim } from "./english-sentence-e
 import { generateSentenceExplanation } from "./sentence-explanation-service";
 
 interface SentenceExplanationPluginEnv {
-  OPENAI_API_KEY?: string;
-  OPENAI_BASE_URL?: string;
-  OPENAI_MODEL?: string;
-  OPENAI_HTTP_TIMEOUT_MS?: string;
-  OPENAI_HTTP_MAX_RETRIES?: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_BASE_URL?: string;
   ANTHROPIC_MODEL?: string;

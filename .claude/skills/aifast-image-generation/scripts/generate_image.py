@@ -119,7 +119,11 @@ def build_candidate_urls(base_url, openai_base_url=None):
 
 
 def generate_image(prompt, output_file, aspect_ratio="1:1", image_size="1K", reference_image_path=None):
-    load_dotenv(".env.local")
+    # 获取脚本所在目录，并从中加载 .env.local
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", ".."))
+    env_path = os.path.join(project_root, ".env.local")
+    load_dotenv(env_path)
     api_key = os.getenv("AIFAST_API_KEY")
     base_url = os.getenv("AIFAST_BASE_URL", "https://aifast.site").rstrip("/")
     openai_base_url = os.getenv("OPENAI_BASE_URL", "").rstrip("/")

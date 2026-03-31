@@ -119,3 +119,11 @@ npm run test:watch
 **Task Snapshots**: `src/lib/supabase-task-snapshots.ts` persists task state snapshots to Supabase when Supabase env vars are set (mirrors image storage pattern).
 
 **Video Export**: `src/lib/sentence-explanation-video-export.ts` handles MP4 export from the video page. Uses the `sentence-explanation-video` skill via a server plugin.
+
+**Video Subtitles**: MP4 export generates synchronized subtitle tracks (`subtitleTrack` with `cues` and `srtText`). Subtitles sync with audio segments and can be styled via `subtitleStyle` parameter.
+
+**Text Line Normalization**: `sentence-explanation-contract.ts` contains `normalizeSentenceExplanationLines()` with punctuation-aware splitting at natural pause positions. Default max line length is 50 characters. Use `stripSentenceExplanationLineEndingPunctuation()` for subtitle text.
+
+**Skills Directory**: AI capabilities live in `.claude/skills/` (e.g., `english-sentence-explanation`, `sentence-explanation-tts`, `sentence-explanation-video`). Each skill has its own SKILL.md, evals, and scripts.
+
+**Audio Timing**: Video export uses `HTMLAudioElement` with `preload="metadata"` to load audio durations. Timeout is 15 seconds (`AUDIO_METADATA_TIMEOUT_MS`).

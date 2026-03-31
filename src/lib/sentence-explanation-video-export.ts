@@ -132,24 +132,172 @@ function loadAudioDuration(audioDataUrl: string, signal?: AbortSignal) {
   });
 }
 
-async function playAudioPreview(audioDataUrl: string, durationSeconds: number, signal?: AbortSignal) {
-  const audio = new Audio(audioDataUrl);
-  audio.preload = "auto";
+async function playAudioPreview(audioDataUrl: string, durationSeconds: number, onTimeUpdate?: (currentTime: number) => void, signal?: AbortSignal): Promise<number> {
+  // 使用 AudioContext 实现精确的时间同步，而不是依赖 setInterval 查询 audio.currentTime
+  // 这样可以确保字幕时间与音频播放严格同步
+  const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
 
   try {
-    await audio.play();
+    // 解码音频数据
+    const response = await fetch(audioDataUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+
+    // 创建音频源节点
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+
+    const startTime = audioContext.currentTime + 0.05; // 添加小延迟确保准确开始
+    const segmentDuration = audioBuffer.duration;
+
+    // 启动时间更新 - 使用 requestAnimationFrame 实现更平滑的字幕更新
+    let animationFrameId: number | null = null;
+    let isPlaying = true;
+
+    const updateTime = () => {
+      if (!isPlaying) return;
+
+      const elapsed = audioContext.currentTime - startTime;
+      if (elapsed >= 0 && elapsed <= segmentDuration) {
+        onTimeUpdate?.(elapsed);
+      }
+
+      if (elapsed < segmentDuration) {
+        animationFrameId = requestAnimationFrame(updateTime);
+      }
+    };
+
+    if (onTimeUpdate) {
+      animationFrameId = requestAnimationFrame(updateTime);
+    }
+
+    // 播放音频
+    source.start(startTime);
+
+    // 等待音频播放完成 - 必须等待 source.onended 确保音频完全播放
+    // 使用实际解码后的 audioBuffer.duration 作为最大等待时间，而不是传入的 durationSeconds
+    const maxWaitTime = Math.ceil(segmentDuration * 1000) + 2000; // 添加 2 秒缓冲
     await Promise.race([
       new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
+        source.onended = () => {
+          isPlaying = false;
+          if (animationFrameId !== null) {
+            cancelAnimationFrame(animationFrameId);
+          }
+          // 最后一次更新时间，确保字幕显示到结束
+          onTimeUpdate?.(segmentDuration);
+          resolve();
+        };
       }),
-      wait(durationSeconds * 1000 + 120, signal),
+      wait(maxWaitTime, signal), // 仅作为安全超时，防止音频事件不触发
     ]);
+
+    // 返回实际播放的音频时长，用于校准时间轴
+    return segmentDuration;
   } catch {
-    await wait(durationSeconds * 1000, signal);
+    // 降级到普通 Audio 元素播放（不同步字幕）
+    const audio = new Audio(audioDataUrl);
+    audio.preload = "auto";
+
+    try {
+      // 先等待音频元数据加载完成，确保 audio.duration 有效
+      await new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          reject(new Error("音频元数据加载超时"));
+        }, AUDIO_METADATA_TIMEOUT_MS);
+
+        const cleanup = () => {
+          window.clearTimeout(timeout);
+          audio.onloadedmetadata = null;
+          audio.onerror = null;
+        };
+
+        if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          cleanup();
+          resolve();
+          return;
+        }
+
+        audio.onloadedmetadata = () => {
+          cleanup();
+          resolve();
+        };
+        audio.onerror = () => {
+          cleanup();
+          reject(new Error("音频加载失败"));
+        };
+      });
+
+      const actualDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : durationSeconds;
+
+      await audio.play();
+      // 等待音频实际播放完成，使用实际音频时长 + 3秒缓冲作为安全超时
+      const maxWaitTime = Math.ceil(actualDuration * 1000) + 3000;
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          audio.onended = () => resolve();
+        }),
+        wait(maxWaitTime, signal),
+      ]);
+      // 返回实际音频时长
+      return actualDuration;
+    } finally {
+      audio.pause();
+      audio.src = "";
+    }
   } finally {
-    audio.pause();
-    audio.src = "";
+    if (audioContext.state !== "closed") {
+      await audioContext.close().catch(() => undefined);
+    }
   }
+}
+
+async function waitForDuration(
+  durationSeconds: number,
+  onTimeUpdate?: (currentTime: number) => void,
+  signal?: AbortSignal,
+) {
+  if (!onTimeUpdate) {
+    return wait(durationSeconds * 1000, signal);
+  }
+
+  // 使用更精细的计时来更新字幕时间
+  const startTime = performance.now();
+  const intervalMs = 50;
+  const durationMs = durationSeconds * 1000;
+
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      cleanup();
+      resolve();
+    }, durationMs);
+
+    const intervalTimer = window.setInterval(() => {
+      const elapsed = (performance.now() - startTime) / 1000;
+      if (elapsed < durationSeconds) {
+        onTimeUpdate(elapsed);
+      }
+    }, intervalMs);
+
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      window.clearInterval(intervalTimer);
+      signal?.removeEventListener("abort", handleAbort);
+    };
+
+    const handleAbort = () => {
+      cleanup();
+      reject(createAbortError());
+    };
+
+    signal?.addEventListener("abort", handleAbort, { once: true });
+  });
 }
 
 function buildClipSubtitleCues(
@@ -263,11 +411,13 @@ async function prepareClipDurations(
       segmentDurations.push(await loadAudioDuration(clip.audioSegments[audioIndex].audioDataUrl, signal));
     }
 
+    // 使用实际音频时长总和作为片段时长，确保与语音播放完全同步
+    const actualAudioDuration = segmentDurations.reduce((total, duration) => total + duration, 0);
     const subtitles = buildClipSubtitleCues(clip, segmentDurations);
     preparedClips.push({
       ...clip,
       exportImageDataUrl,
-      durationSeconds: subtitles.reduce((total, subtitle) => total + subtitle.durationSeconds, 0),
+      durationSeconds: actualAudioDuration, // 使用实际音频时长总和，而不是字幕时长总和
       segmentDurations,
       subtitles,
     });
@@ -336,7 +486,7 @@ async function simulateClipPlayback(
   reportProgress: (progress: Omit<SentenceExplanationVideoProgress, "clipCount">) => void,
   onSubtitleTextChange?: (text: string) => void,
   signal?: AbortSignal,
-) {
+): Promise<number> {
   reportProgress({
     stage: "recording",
     progress: 30 + (elapsedSeconds / Math.max(totalDurationSeconds, 0.001)) * 62,
@@ -347,20 +497,50 @@ async function simulateClipPlayback(
     imageSrc: preparedClip.imageSrc,
   });
 
+  // 构建字幕时间轴，用于根据当前播放时间查找应显示的字幕
+  const subtitleTimeline = preparedClip.subtitles.map((subtitle, index) => ({
+    index,
+    text: subtitle.text,
+    startSeconds: subtitle.startSeconds,
+    endSeconds: subtitle.endSeconds,
+  }));
+
+  // 根据当前播放时间更新字幕的函数
+  const updateSubtitleByTime = (currentTimeSeconds: number) => {
+    // 找到当前时间对应的字幕
+    const currentSubtitle = subtitleTimeline.find(
+      (sub) => currentTimeSeconds >= sub.startSeconds && currentTimeSeconds < sub.endSeconds
+    );
+    if (currentSubtitle) {
+      onSubtitleTextChange?.(currentSubtitle.text);
+    }
+  };
+
+  // 顺序播放每个音频段，并在播放过程中同步更新字幕
+  let actualClipDuration = 0;
   for (let segmentIndex = 0; segmentIndex < preparedClip.audioSegments.length; segmentIndex += 1) {
+    const segment = preparedClip.audioSegments[segmentIndex];
     const durationSeconds = preparedClip.segmentDurations[segmentIndex] ?? 1;
-    onSubtitleTextChange?.(preparedClip.subtitles[segmentIndex]?.text || preparedClip.audioSegments[segmentIndex]?.text || "");
+
+    // 计算此段相对于片段开始的时间偏移
+    const segmentStartOffset = actualClipDuration;
+
+    // 创建时间更新回调，将相对时间转换为片段内的绝对时间
+    const onTimeUpdate = (currentTimeInSegment: number) => {
+      const absoluteTimeInClip = segmentStartOffset + currentTimeInSegment;
+      updateSubtitleByTime(absoluteTimeInClip);
+    };
 
     if (monitorAudio) {
-      await playAudioPreview(preparedClip.audioSegments[segmentIndex].audioDataUrl, durationSeconds, signal);
+      // 播放音频并获取实际播放时长
+      const actualDuration = await playAudioPreview(segment.audioDataUrl, durationSeconds, onTimeUpdate, signal);
+      actualClipDuration += actualDuration;
     } else {
-      await wait(durationSeconds * 1000, signal);
+      await waitForDuration(durationSeconds, onTimeUpdate, signal);
+      actualClipDuration += durationSeconds;
     }
 
-    const clipElapsed = preparedClip.segmentDurations
-      .slice(0, segmentIndex + 1)
-      .reduce((total, duration) => total + duration, 0);
-    const percent = 30 + ((elapsedSeconds + clipElapsed) / Math.max(totalDurationSeconds, 0.001)) * 62;
+    const percent = 30 + ((elapsedSeconds + actualClipDuration) / Math.max(totalDurationSeconds, 0.001)) * 62;
 
     reportProgress({
       stage: "recording",
@@ -372,6 +552,9 @@ async function simulateClipPlayback(
       imageSrc: preparedClip.imageSrc,
     });
   }
+
+  // 返回实际播放的片段时长，用于校准总进度
+  return actualClipDuration;
 }
 
 export async function buildSentenceExplanationVideoSubtitleTrack({
@@ -424,7 +607,8 @@ export async function exportSentenceExplanationVideoMp4({
   let elapsedSeconds = 0;
   for (let index = 0; index < preparedClips.length; index += 1) {
     throwIfAborted(signal);
-    await simulateClipPlayback(
+    // 获取实际播放的片段时长，用于校准总进度
+    const actualClipDuration = await simulateClipPlayback(
       preparedClips[index],
       totalDurationSeconds,
       elapsedSeconds,
@@ -435,7 +619,8 @@ export async function exportSentenceExplanationVideoMp4({
       onSubtitleTextChange,
       signal,
     );
-    elapsedSeconds += preparedClips[index].durationSeconds;
+    // 使用实际播放时长累加，确保进度准确
+    elapsedSeconds += actualClipDuration;
   }
 
   onSubtitleTextChange?.("");

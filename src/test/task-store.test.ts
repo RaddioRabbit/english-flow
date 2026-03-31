@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  createSentenceExplanationArticleTask,
   createSentenceExplanationRevisionTask,
   createRevisionTask,
   defaultReferenceImages,
@@ -10,6 +11,7 @@ import {
   getTaskWorkflowId,
   loadTasks,
   resolveTaskResumeRoute,
+  saveSentenceExplanationVideo,
   saveTasks,
   type ModuleId,
   type Task,
@@ -516,5 +518,88 @@ describe("createSentenceExplanationRevisionTask", () => {
     expect(storedTasks.find((task) => task.id === nextTask?.id)?.sentenceExplanation?.article?.article.title).toBe(
       "Revised sentence explanation",
     );
+  });
+});
+
+describe("createSentenceExplanationArticleTask", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("creates a separate history record for the first generated sentence explanation article", async () => {
+    const now = "2026-03-17T00:00:00.000Z";
+    const originalTask: Task = {
+      ...buildTask(),
+      id: "task-image-only",
+      generatedImages: {
+        translation: buildGeneratedImage("translation", now),
+        grammar: buildGeneratedImage("grammar", now),
+      },
+      resumeRoute: "result",
+      createdAt: now,
+      updatedAt: now,
+      completedAt: now,
+    };
+
+    saveTasks([originalTask]);
+
+    const articleTask = await createSentenceExplanationArticleTask(originalTask, buildSentenceExplanationResponse());
+
+    expect(articleTask).not.toBeNull();
+    expect(articleTask?.id).not.toBe(originalTask.id);
+    expect(articleTask?.sentenceExplanation?.article?.article.title).toBe("Sentence explanation");
+    expect(articleTask?.sentenceExplanation?.stage).toBe("article");
+    expect(articleTask?.resumeRoute).toBe("explanation");
+
+    const storedTasks = loadTasks();
+    expect(storedTasks).toHaveLength(2);
+    expect(storedTasks.find((task) => task.id === originalTask.id)?.sentenceExplanation?.article).toBeNull();
+    expect(storedTasks.find((task) => task.id === articleTask?.id)?.sentenceExplanation?.article?.article.title).toBe(
+      "Sentence explanation",
+    );
+    expect(getHistoryTasks(storedTasks)).toHaveLength(2);
+  });
+});
+
+describe("saveSentenceExplanationVideo", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("assigns a fresh video asset id when replacing an existing exported video", async () => {
+    const now = "2026-03-17T00:00:00.000Z";
+    const originalTask: Task = {
+      ...buildTask(),
+      sentenceExplanation: {
+        article: buildSentenceExplanationResponse(),
+        tts: buildSentenceExplanationTts(),
+        video: {
+          id: "video-existing",
+          fileName: "old-video.mp4",
+          mimeType: "video/mp4",
+          dataUrl: "data:video/mp4;base64,old-video",
+          durationSeconds: 8,
+          createdAt: now,
+        },
+        stage: "video",
+        updatedAt: now,
+      },
+      resumeRoute: "video",
+    };
+
+    saveTasks([originalTask]);
+
+    await saveSentenceExplanationVideo(originalTask.id, {
+      id: "video-existing",
+      fileName: "new-video.mp4",
+      mimeType: "video/mp4",
+      dataUrl: "data:video/mp4;base64,new-video",
+      durationSeconds: 12,
+      createdAt: "2026-03-18T00:00:00.000Z",
+    });
+
+    const storedTask = loadTasks().find((task) => task.id === originalTask.id);
+    expect(storedTask?.sentenceExplanation?.video?.id).not.toBe("video-existing");
+    expect(storedTask?.sentenceExplanation?.video?.fileName).toBe("new-video.mp4");
   });
 });

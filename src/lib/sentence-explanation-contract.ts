@@ -79,7 +79,10 @@ function extractSentenceExplanationLineEndingPunctuation(value: string) {
 }
 
 function countSentenceExplanationLineCharacters(value: string) {
-  return Array.from(stripSentenceExplanationLineEndingPunctuation(value).replace(/\s+/g, "")).length;
+  // 规范化空白：将多个连续空格/换行/制表符合并为一个空格
+  // 这样英文单词间保留一个空格，同时去除首尾空白
+  const normalized = stripSentenceExplanationLineEndingPunctuation(value).replace(/\s+/g, " ").trim();
+  return Array.from(normalized).length;
 }
 
 function trimSentenceExplanationLine(value: string) {
@@ -245,11 +248,17 @@ function splitSentenceExplanationTextIntoSentences(value: string) {
 
 function normalizeExplicitSentenceExplanationLines(
   lines: string[],
+  maxLineLength = SENTENCE_EXPLANATION_MAX_LINE_LENGTH,
   options?: NormalizeSentenceExplanationLineOptions,
 ) {
   return lines
     .map((line) => trimSentenceExplanationLine(line))
     .filter(Boolean)
+    .flatMap((line) => {
+      // 对每一行也进行长度检查，如果超过限制则分割
+      const splitLines = splitSentenceExplanationChunk(line, maxLineLength, options);
+      return splitLines.length > 0 ? splitLines : [line];
+    })
     .map((line) => (options?.stripLineEndPunctuation ? stripSentenceExplanationLineEndingPunctuation(line) : line))
     .filter(Boolean);
 }
@@ -261,7 +270,7 @@ export function normalizeSentenceExplanationLines(
   options?: NormalizeSentenceExplanationLineOptions,
 ) {
   if (Array.isArray(lines) && lines.length) {
-    return normalizeExplicitSentenceExplanationLines(lines, options);
+    return normalizeExplicitSentenceExplanationLines(lines, maxLineLength, options);
   }
 
   return splitSentenceExplanationTextIntoSentences(fallbackText)

@@ -15,10 +15,13 @@ import {
 } from "@/components/ui/select";
 import { generateSentenceExplanation } from "@/lib/sentence-explanation-client";
 import {
+  replaceSentenceExplanationSection,
   updateSentenceExplanationArticleText,
   updateSentenceExplanationSectionContent,
 } from "@/lib/sentence-explanation-article-edit";
 import {
+  joinSentenceExplanationLines,
+  normalizeSentenceExplanationLines,
   getSentenceExplanationRegenerationTargetKey,
   sentenceExplanationModuleLabels,
   sentenceExplanationModuleOrder,
@@ -45,6 +48,7 @@ import type {
   SentenceExplanationTtsVoice,
 } from "@/lib/sentence-explanation-tts-contract";
 import {
+  createSentenceExplanationArticleTask,
   createSentenceExplanationRevisionTask,
   getGeneratedImageSource,
   hasGeneratedImageSource,
@@ -76,11 +80,31 @@ function formatLoadingStage(progress: number) {
 }
 
 function estimateTtsLoadingProgress(elapsedMs: number) {
-  const progress = 8 + 86 * (1 - Math.exp(-elapsedMs / 24_000));
-  return Math.min(94, Math.max(8, Math.round(progress)));
+  const estimatedDurationMs = 48_000;
+  const ratio = elapsedMs / estimatedDurationMs;
+  const progress = 8 + 86 * (1 - Math.exp(-ratio * 2.2));
+  return Math.min(99, Math.max(8, Math.round(progress)));
 }
 
-function formatTtsLoadingStage(progress: number) {
+const LONG_FORM_TTS_SEGMENT_THRESHOLD = 60;
+
+function formatTtsLoadingStage(progress: number, segmentCount: number) {
+  if (segmentCount >= LONG_FORM_TTS_SEGMENT_THRESHOLD) {
+    if (progress < 35) {
+      return "正在整理长文讲解并准备语音参数...";
+    }
+
+    if (progress < 70) {
+      return `正在分批生成 ${segmentCount} 段语音...`;
+    }
+
+    if (progress < 90) {
+      return `长文共有 ${segmentCount} 段语音，正在继续生成剩余片段...`;
+    }
+
+    return `长文共有 ${segmentCount} 段语音，正在汇总音频结果并回写页面...`;
+  }
+
   if (progress < 35) {
     return "正在整理讲解文章并准备语音参数...";
   }
@@ -90,6 +114,14 @@ function formatTtsLoadingStage(progress: number) {
   }
 
   return "正在汇总音频结果并回写页面...";
+}
+
+function formatTtsLoadingHint(segmentCount: number) {
+  if (segmentCount >= LONG_FORM_TTS_SEGMENT_THRESHOLD) {
+    return `当前文章共 ${segmentCount} 段语音。长文 TTS 会明显比普通文章慢，页面会在全部音频就绪后自动回写。`;
+  }
+
+  return "当前会按讲解文章的顺序逐段生成音频，生成完成后可直接在对应模块中播放。";
 }
 
 function LoadingDots({ className = "" }: { className?: string }) {
@@ -128,6 +160,85 @@ function isSameSnapshot(left: unknown, right: unknown) {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
+const VOCABULARY_NUMBER_LABELS: Record<string, number> = {
+  "一": 1,
+  "二": 2,
+  "三": 3,
+  "四": 4,
+  "五": 5,
+  "六": 6,
+  "七": 7,
+  "八": 8,
+  "九": 9,
+  "十": 10,
+};
+
+function parseVocabularyEntryNumber(line: string) {
+  const match = line.replace(/\s+/g, " ").match(/第\s*([0-9]+|[一二三四五六七八九十]+)\s*个词/u);
+  if (!match) {
+    return null;
+  }
+
+  const token = match[1] || "";
+  if (/^\d+$/.test(token)) {
+    return Number.parseInt(token, 10);
+  }
+
+  return VOCABULARY_NUMBER_LABELS[token] ?? null;
+}
+
+function sanitizeSentenceExplanationPayload(payload: SentenceExplanationResponse | null) {
+  if (!payload) {
+    return payload;
+  }
+
+  const vocabularySection = payload.article.sections.find((section) => section.moduleId === "vocabulary");
+  if (!vocabularySection) {
+    return payload;
+  }
+
+  const lines = normalizeSentenceExplanationLines(vocabularySection.lines, vocabularySection.content);
+  if (lines.length < 2) {
+    return payload;
+  }
+
+  const seenNumbers = new Set<number>();
+  let duplicateStartIndex = -1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const number = parseVocabularyEntryNumber(lines[index] || "");
+    if (number === null) {
+      continue;
+    }
+
+    if (number === 1 && seenNumbers.size >= 2) {
+      duplicateStartIndex = index;
+      break;
+    }
+
+    seenNumbers.add(number);
+  }
+
+  if (duplicateStartIndex < 0) {
+    return payload;
+  }
+
+  const dedupedLines = lines.slice(0, duplicateStartIndex);
+  const nextArticle = replaceSentenceExplanationSection(payload.article, "vocabulary", {
+    moduleName: vocabularySection.moduleName,
+    imageRef: vocabularySection.imageRef,
+    content: joinSentenceExplanationLines(dedupedLines),
+    lines: dedupedLines,
+  });
+
+  return isSameSnapshot(nextArticle, payload.article)
+    ? payload
+    : {
+        ...payload,
+        article: nextArticle,
+      };
+}
+
 function countResolvedTtsSegments(payload: SentenceExplanationTtsResponse | null | undefined) {
   if (!payload) {
     return 0;
@@ -146,6 +257,26 @@ function countResolvedTtsSegments(payload: SentenceExplanationTtsResponse | null
 
     return total + (content.audioDataUrl || content.publicUrl ? 1 : 0);
   }, 0);
+}
+
+function countSentenceExplanationTtsSegments(article: SentenceExplanationResponse["article"] | null | undefined) {
+  if (!article) {
+    return 0;
+  }
+
+  const introductionCount = normalizeSentenceExplanationLines(
+    article.introductionLines,
+    article.introduction,
+  ).length;
+  const sectionCount = article.sections.reduce((total, section) => {
+    return total + normalizeSentenceExplanationLines(section.lines, section.content).length;
+  }, 0);
+  const conclusionCount = normalizeSentenceExplanationLines(
+    article.conclusionLines,
+    article.conclusion,
+  ).length;
+
+  return introductionCount + sectionCount + conclusionCount;
 }
 
 function pickStableTtsPayload(
@@ -237,10 +368,25 @@ export default function SentenceExplanationPage() {
   const [editingBlocks, setEditingBlocks] = useState<Record<string, boolean>>({});
   const [articleEditedSinceTts, setArticleEditedSinceTts] = useState(false);
   const article = state.payload?.article ?? null;
+  const ttsSegmentCount = useMemo(() => countSentenceExplanationTtsSegments(article), [article]);
   const hasArticleDraftChanges = useMemo(
     () => Boolean(task && state.payload && !isSameSnapshot(state.payload, task.sentenceExplanation?.article ?? null)),
     [state.payload, task],
   );
+  const taskHasSavedExplanation = useMemo(() => {
+    if (!task?.sentenceExplanation) {
+      return false;
+    }
+
+    return Boolean(
+      task.sentenceExplanation.article ||
+        task.sentenceExplanation.tts ||
+        task.sentenceExplanation.video ||
+        task.sentenceExplanation.stage === "article" ||
+        task.sentenceExplanation.stage === "tts" ||
+        task.sentenceExplanation.stage === "video",
+    );
+  }, [task]);
 
   const explanationReady = useMemo(
     () => sentenceExplanationModuleOrder.every((moduleId) => hasGeneratedImageSource(task?.generatedImages?.[moduleId])),
@@ -322,7 +468,7 @@ export default function SentenceExplanationPage() {
     setState({
       loading: false,
       error: "",
-      payload: task.sentenceExplanation?.article ?? null,
+      payload: sanitizeSentenceExplanationPayload(task.sentenceExplanation?.article ?? null),
     });
     setTtsState({
       loading: false,
@@ -415,7 +561,27 @@ export default function SentenceExplanationPage() {
     setState((current) => ({ ...current, loading: true, error: "" }));
 
     try {
-      const payload = await generateSentenceExplanation(targetTask);
+      const payload = sanitizeSentenceExplanationPayload(await generateSentenceExplanation(targetTask));
+      const shouldCreateArticleHistoryTask = Boolean(
+        !task.sentenceExplanation?.article && !task.sentenceExplanation?.tts && !task.sentenceExplanation?.video,
+      );
+
+      if (shouldCreateArticleHistoryTask) {
+        const nextTask = await createSentenceExplanationArticleTask(task, payload);
+        if (nextTask) {
+          setLoadingProgress(100);
+          setEditingBlocks({});
+          setArticleEditedSinceTts(false);
+          setState({
+            loading: false,
+            error: "",
+            payload,
+          });
+          navigate(`/explanation/${nextTask.id}`, { replace: true });
+          return;
+        }
+      }
+
       saveSentenceExplanationArticle(targetTask.id, payload);
       setLoadingProgress(100);
       setEditingBlocks({});
@@ -436,7 +602,7 @@ export default function SentenceExplanationPage() {
         payload: null,
       });
     }
-  }, [createSentenceExplanationRevisionTask, explanationReady, navigate, task]);
+  }, [createSentenceExplanationArticleTask, createSentenceExplanationRevisionTask, explanationReady, navigate, task]);
 
   const setBlockEditing = useCallback((blockKey: string, editing: boolean) => {
     setEditingBlocks((current) => {
@@ -526,10 +692,10 @@ export default function SentenceExplanationPage() {
       }));
 
       try {
-        const payload = await generateSentenceExplanation(task, {
+        const payload = sanitizeSentenceExplanationPayload(await generateSentenceExplanation(task, {
           currentArticle: state.payload.article,
           regenerationTarget: target,
-        });
+        }));
 
         setState({
           loading: false,
@@ -646,7 +812,7 @@ export default function SentenceExplanationPage() {
   };
 
   useEffect(() => {
-    if (!task || !explanationReady || state.payload || state.loading || state.error) {
+    if (!task || !explanationReady || taskHasSavedExplanation || state.payload || state.loading || state.error) {
       return;
     }
 
@@ -657,7 +823,7 @@ export default function SentenceExplanationPage() {
 
     autoLoadTaskKeyRef.current = autoLoadKey;
     void loadExplanation({ branchIfExisting: false });
-  }, [explanationReady, loadExplanation, state.error, state.loading, state.payload, task]);
+  }, [explanationReady, loadExplanation, state.error, state.loading, state.payload, task, taskHasSavedExplanation]);
 
   useEffect(() => {
     if (!state.loading) {
@@ -688,14 +854,20 @@ export default function SentenceExplanationPage() {
 
     const startedAt = Date.now();
     const timer = window.setInterval(() => {
-      const nextProgress = estimateTtsLoadingProgress(Date.now() - startedAt);
+      const estimatedDurationMs = Math.max(48_000, Math.min(240_000, 18_000 + ttsSegmentCount * 1_800));
+      const elapsedMs = Date.now() - startedAt;
+      const ratio = elapsedMs / (estimatedDurationMs * 0.85);
+      const nextProgress =
+        ratio < 1
+          ? Math.min(90, estimateTtsLoadingProgress(Math.round(ratio * 48_000)))
+          : Math.min(99, Math.max(90, Math.round(90 + 9 * (1 - Math.exp(-(elapsedMs - estimatedDurationMs * 0.85) / 45_000)))));
       setTtsLoadingProgress((current) => (current >= nextProgress ? current : nextProgress));
     }, 240);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [ttsState.loading, ttsState.payload]);
+  }, [ttsSegmentCount, ttsState.loading, ttsState.payload]);
 
   const isEditingIntroduction = Boolean(editingBlocks.introduction);
   const isEditingConclusion = Boolean(editingBlocks.conclusion);
@@ -916,7 +1088,7 @@ export default function SentenceExplanationPage() {
                     <SelectContent>
                       {sentenceExplanationTtsLanguageOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
-                          {option.label} 路 {option.nativeLabel}
+                          {option.label} · {option.nativeLabel}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1075,7 +1247,7 @@ export default function SentenceExplanationPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <LoadingDots />
-                    <span>{formatTtsLoadingStage(ttsLoadingProgress)}</span>
+                    <span>{formatTtsLoadingStage(ttsLoadingProgress, ttsSegmentCount)}</span>
                   </div>
                   <span className="text-xs font-semibold text-accent">{ttsLoadingProgress}%</span>
                 </div>
@@ -1087,7 +1259,7 @@ export default function SentenceExplanationPage() {
                   />
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  当前会按讲解文章的顺序逐段生成音频，生成完成后可直接在对应模块中播放。
+                  {formatTtsLoadingHint(ttsSegmentCount)}
                 </p>
               </div>
             ) : null}
@@ -1127,12 +1299,7 @@ export default function SentenceExplanationPage() {
                   ) : null}
                   <span className="text-xs text-muted-foreground">model: {ttsState.payload.model}</span>
                 </div>
-                {videoPlanState.plan ? (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    已满足视频生成条件。点击上方“生成视频”后，会进入新页面模拟 Claude Code 调用
-                    `sentence-explanation-video` skill，并显示视频生成进度。
-                  </p>
-                ) : videoPlanState.error ? (
+                {videoPlanState.plan ? null : videoPlanState.error ? (
                   <p className="mt-3 text-xs text-muted-foreground">{videoPlanState.error}</p>
                 ) : null}
               </div>

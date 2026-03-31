@@ -54,6 +54,30 @@ describe("sentence explanation line normalization", () => {
     ]);
   });
 
+  it("correctly segments long English sentences with mixed Chinese text", () => {
+    // 模拟截图中的场景：中英文混合的长句应该正确分段
+    const result = normalizeSentenceExplanationLines(
+      undefined,
+      "先看句译对照图，原句是 Now, as the waves were not so high as at first, being nearer land, I held my hold till the wave abated.",
+      50,
+    );
+
+    // 验证每一行都不超过50字
+    for (const line of result) {
+      const charCount = Array.from(line.replace(/\s+/g, " ").trim()).length;
+      expect(charCount).toBeLessThanOrEqual(50);
+    }
+
+    // 验证内容被正确分段（应该分成多行）
+    expect(result.length).toBeGreaterThan(1);
+
+    // 验证第一行在50字以内（实际验证分段生效）
+    expect(result[0]).toBe("先看句译对照图，原句是 Now, as the waves were not so high as");
+
+    // 验证第二行也有合理的内容
+    expect(result[1]).toContain("at first");
+  });
+
   it("removes sentence-ending punctuation for subtitles", () => {
     expect(stripSentenceExplanationLineEndingPunctuation("再观察作者如何铺垫语气。")).toBe("再观察作者如何铺垫语气");
     expect(stripSentenceExplanationLineEndingPunctuation("理解句子的基本意思，")).toBe("理解句子的基本意思");

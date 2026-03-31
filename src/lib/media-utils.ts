@@ -1,5 +1,7 @@
 import { getGeneratedImageSource, type GeneratedImage } from "@/lib/task-store";
 
+const BITMAP_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp);base64,/i;
+
 function createAbortError() {
   return new DOMException("The operation was aborted.", "AbortError");
 }
@@ -193,17 +195,17 @@ export async function downloadGeneratedImage(image: GeneratedImage) {
     return;
   }
 
-  const pngUrl = source.startsWith("data:image/svg+xml")
-    ? await svgToPngDataUrl(source)
-    : source;
+  if (BITMAP_DATA_URL_PATTERN.test(source)) {
+    downloadUrl(source, image.fileName);
+    return;
+  }
+
+  const pngUrl = await normalizeImageSourceToDataUrl(source);
   downloadUrl(pngUrl, image.fileName);
 }
 
 export async function downloadAllImages(images: GeneratedImage[]) {
-  for (const image of images) {
-    await downloadGeneratedImage(image);
-    await new Promise((resolve) => window.setTimeout(resolve, 120));
-  }
+  await Promise.all(images.map((image) => downloadGeneratedImage(image)));
 }
 
 export async function sharePage(title: string, url: string) {

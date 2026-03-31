@@ -338,6 +338,60 @@ describe("SentenceExplanationVideoPage", () => {
     expect(screen.getByRole("button", { name: "Download SRT" })).toBeInTheDocument();
   });
 
+  it("keeps the freshly generated blob for preview and download when persisted state refreshes", async () => {
+    let currentTask = buildTask({ withVideo: true, completePlan: true, withSubtitleTrack: true });
+    const subtitleTrack = buildSubtitleTrack();
+
+    useHydratedTaskMock.mockImplementation(() => currentTask);
+    exportSentenceExplanationVideoMp4Mock.mockResolvedValue({
+      blob: new Blob(["video"], { type: "video/mp4" }),
+      objectUrl: "blob:generated-video",
+      fileName: "explanation.mp4",
+      mimeType: "video/mp4",
+      durationSeconds: 12,
+      plan: createSentenceExplanationVideoPlan(currentTask, currentTask.sentenceExplanation!.article!.article, currentTask.sentenceExplanation!.tts!),
+      subtitleTrack,
+    });
+    saveSentenceExplanationVideoMock.mockImplementation(async (_taskId: string, payload: { id: string; createdAt: string }) => {
+      currentTask = {
+        ...currentTask,
+        sentenceExplanation: {
+          ...currentTask.sentenceExplanation!,
+          video: {
+            id: payload.id,
+            fileName: "sentence-explanation-video.mp4",
+            mimeType: "video/mp4",
+            dataUrl: "",
+            publicUrl: "https://cdn.example.com/sentence-explanation-video.mp4",
+            durationSeconds: 12,
+            createdAt: payload.createdAt,
+            subtitleTrack,
+          },
+          stage: "video",
+          updatedAt: payload.createdAt,
+        },
+      };
+
+      return {
+        success: true,
+        synced: true,
+        url: currentTask.sentenceExplanation?.video?.publicUrl,
+      };
+    });
+
+    renderPage();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "重新生成视频" }));
+
+    await waitFor(() => expect(saveSentenceExplanationVideoMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("link", { name: "下载视频" })).toBeInTheDocument());
+
+    const downloadLink = screen.getByRole("link", { name: "下载视频" });
+    expect(downloadLink.getAttribute("href")).toBe("blob:generated-video");
+    expect(saveSentenceExplanationVideoMock.mock.calls[0]?.[1]?.id).not.toBe("video-1");
+  });
+
   it("rebuilds the SRT download entry for legacy historical videos", async () => {
     const subtitleTrack = buildSubtitleTrack();
 
