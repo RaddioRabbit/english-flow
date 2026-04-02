@@ -127,3 +127,9 @@ npm run test:watch
 **Skills Directory**: AI capabilities live in `.claude/skills/` (e.g., `english-sentence-explanation`, `sentence-explanation-tts`, `sentence-explanation-video`). Each skill has its own SKILL.md, evals, and scripts.
 
 **Audio Timing**: Video export uses `HTMLAudioElement` with `preload="metadata"` to load audio durations. Timeout is 15 seconds (`AUDIO_METADATA_TIMEOUT_MS`).
+
+## Custom Agents
+
+- Custom Claude Code agent specs live in `.claude/agents/`.
+- The CEO orchestration agent is defined in `.claude/agents/ceo.md`.
+- This CEO agent is opt-in only: it should respond only when the user explicitly mentions `CEO`.
