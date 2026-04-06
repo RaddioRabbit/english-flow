@@ -3,8 +3,8 @@ import { BookOpen, History, Info, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/", label: "图片改字", icon: Sparkles },
-  { to: "/sentence-agent", label: "句子任务", icon: BookOpen },
+  { to: "/", label: "句子任务", icon: BookOpen },
+  { to: "/text-transfer", label: "图片改字", icon: Sparkles },
   { to: "/history", label: "历史记录", icon: History },
   { to: "/about", label: "关于", icon: Info },
 ];

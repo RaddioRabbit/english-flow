@@ -1,0 +1,256 @@
+{
+  "skill_name": "ceo-agent-orchestrator",
+  "description": "测试CEO调度Agent并确保Agent调用Skill的能力",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "ceo-prd-task",
+      "prompt": "ceo,帮我写一个用户登录功能的PRD文档",
+      "expected_output": "CEO被激活，派遣cp-lead完成PRD，cp-lead调用feature-dev和plan-ceo-review技能",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ceo_activated",
+          "description": "CEO应该被激活",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "cp-lead"
+        },
+        {
+          "name": "cp_lead_dispatched",
+          "description": "应该派遣cp-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["cp-lead", "产品"]
+        },
+        {
+          "name": "skill_invoked",
+          "description": "应该提到调用Skill",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["feature-dev", "skill", "Skill"]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "ceo-ui-design-task",
+      "prompt": "CEO帮我设计一个首页的UI界面",
+      "expected_output": "CEO被激活，派遣xd-lead完成UI设计，xd-lead调用frontend-design或design-consultation技能",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ceo_activated",
+          "description": "CEO应该被激活",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "xd-lead"
+        },
+        {
+          "name": "xd_lead_dispatched",
+          "description": "应该派遣xd-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["xd-lead", "设计"]
+        },
+        {
+          "name": "design_skill_invoked",
+          "description": "应该提到设计相关Skill",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["frontend-design", "design-consultation", "design"]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "ceo-development-task",
+      "prompt": "ceo,实现一个待办事项添加功能",
+      "expected_output": "CEO被激活，派遣cp-lead→xd-lead→cp-arch完成端到端实现，各Agent调用对应Skill",
+      "files": [],
+      "assertions": [
+        {
+          "name": "multi_agent_dispatched",
+          "description": "应该派遣多个Agent协作",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["cp-lead", "xd-lead", "cp-arch"]
+        },
+        {
+          "name": "dev_skill_invoked",
+          "description": "应该提到开发相关Skill",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["code-architect", "code-explorer", "simplify"]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "ceo-bugfix-task",
+      "prompt": "CEO搞定这个登录bug",
+      "expected_output": "CEO被激活，派遣qa-lead定位和修复Bug，qa-lead调用investigate或review技能",
+      "files": [],
+      "assertions": [
+        {
+          "name": "qa_lead_dispatched",
+          "description": "应该派遣qa-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "qa-lead"
+        },
+        {
+          "name": "qa_skill_invoked",
+          "description": "应该提到QA相关Skill",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["investigate", "review", "codex"]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "ceo-deploy-task",
+      "prompt": "ceo,部署这个应用到生产环境",
+      "expected_output": "CEO被激活，派遣pe-lead执行部署，pe-lead调用land-and-deploy或canary技能",
+      "files": [],
+      "assertions": [
+        {
+          "name": "pe_lead_dispatched",
+          "description": "应该派遣pe-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "pe-lead"
+        },
+        {
+          "name": "deploy_skill_invoked",
+          "description": "应该提到部署相关Skill",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["land-and-deploy", "canary", "deploy"]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "eval_name": "ceo-skill-development",
+      "prompt": "CEO，帮我创建一个新的Agent Skill用于数据分析",
+      "expected_output": "CEO被激活，派遣ext-lead创建Skill，ext-lead调用skill-creator技能",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ext_lead_dispatched",
+          "description": "应该派遣ext-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "ext-lead"
+        },
+        {
+          "name": "skill_creator_invoked",
+          "description": "应该提到skill-creator",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "skill-creator"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "eval_name": "ceo-end-to-end-product",
+      "prompt": "CEO，从零开始完整实现一个博客系统",
+      "expected_output": "CEO被激活，派遣全链路Agent(cp-lead→xd-lead→cp-arch→qa-lead→pe-lead)，各Agent调用对应Skill",
+      "files": [],
+      "assertions": [
+        {
+          "name": "full_pipeline_dispatched",
+          "description": "应该派遣完整链路Agent",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_all",
+          "expected": ["cp-lead", "xd-lead", "cp-arch"]
+        },
+        {
+          "name": "multiple_skills_invoked",
+          "description": "应该提到多个Skill",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["feature-dev", "frontend-design", "code-architect"]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "ceo-claude-md-update",
+      "prompt": "ceo,更新CLAUDE.md文件",
+      "expected_output": "CEO被激活，派遣pe-lead更新CLAUDE.md，pe-lead调用claude-md-management:revise-claude-md技能",
+      "files": [],
+      "assertions": [
+        {
+          "name": "pe_lead_dispatched",
+          "description": "应该派遣pe-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "pe-lead"
+        },
+        {
+          "name": "claude_md_skill_invoked",
+          "description": "应该提到claude-md-management",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": ["claude-md-management", "revise-claude-md"]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "ceo-dispatch-keyword",
+      "prompt": "调度cp-lead来做产品规划",
+      "expected_output": "CEO被激活，派遣cp-lead完成产品规划",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ceo_activated_by_dispatch",
+          "description": "CEO应该被'调度'关键词激活",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "cp-lead"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "direct-agent-no-ceo",
+      "prompt": "cp-lead帮我写个PRD",
+      "expected_output": "CEO不应该被激活，只有cp-lead直接响应",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ceo_not_activated",
+          "description": "CEO不应该被激活",
+          "type": "content_check",
+          "target": "response",
+          "condition": "not_contains",
+          "expected": ["派遣", "调度", "激活"]
+        }
+      ]
+    }
+  ]
+}

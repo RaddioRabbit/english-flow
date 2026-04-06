@@ -302,7 +302,15 @@ export default function CreateTaskPage() {
                       <div className="mt-4 rounded-2xl border border-dashed border-border bg-background p-3">
                         {asset ? (
                           <div className="space-y-3">
-                            <img src={asset.dataUrl} alt={slot.title} className="h-36 w-full rounded-xl object-cover" />
+                            {asset.dataUrl ? (
+                              <img src={asset.dataUrl} alt={slot.title} className="h-36 w-full rounded-xl object-cover" />
+                            ) : (
+                              <div className="flex h-36 flex-col items-center justify-center rounded-xl bg-secondary/30 text-center">
+                                <ImagePlus className="mb-2 h-8 w-8 text-muted-foreground/50" />
+                                <div className="text-sm font-medium text-muted-foreground">图片数据已丢失</div>
+                                <div className="mt-1 text-xs text-muted-foreground">请重新上传图片</div>
+                              </div>
+                            )}
                             <div className="text-xs text-muted-foreground">
                               <div className="truncate font-medium text-foreground">{asset.fileName}</div>
                               <div>{(asset.fileSize / 1024 / 1024).toFixed(2)} MB · 已保存</div>

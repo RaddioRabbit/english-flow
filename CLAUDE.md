@@ -48,11 +48,14 @@ npm run test:watch
 
 ### Directory Structure
 
-- `src/pages/` - Route-level page components (CreateTask, EditTask, TaskExecution, TaskResults, HistoryPage, AboutPage)
+- `src/pages/` - Route-level page components (CreateTask, EditTask, TaskExecution, TaskResults, HistoryPage, AboutPage, SentenceExplanationPage, SentenceExplanationVideoPage, TextTransferPage)
 - `src/components/ui/` - shadcn/ui component library (50+ reusable components)
 - `src/lib/` - Core utilities and business logic
 - `server/` - Vite dev server plugins for API routes
+- `server/agents/` - Image generation subagent implementations (one per module type)
 - `public/` - Static assets and PRD documentation
+- `.claude/agents/` - Custom Claude Code agent specs (CEO, cp-lead, cp-arch, xd-lead, qa-lead, pe-lead, ext-lead)
+- `.claude/skills/` - AI skill implementations (english-sentence-explanation, sentence-explanation-tts, sentence-explanation-video, xiaohongshu-sentence-analysis, aifast-image-generation, aifast-text-transfer-editor, gemini-image-generation, json-to-tts)
 
 ### Key Architectural Patterns
 
@@ -80,13 +83,15 @@ npm run test:watch
 
 ### Route Structure
 
-- `/` - Create new task (sentence input)
+- `/` or `/sentence-agent` or `/create-task` - Create new task (sentence input); `/` maps directly to `CreateTaskPage` (no separate HomePage)
 - `/edit/:taskId` - Edit parsed text content before generation
-- `/task/:taskId` - Task execution/progress page
+- `/task/:taskId` - Task execution/progress page (includes inline xiaohongshu analysis panel)
 - `/result/:taskId` - View generated results
+- `/explanation/:taskId` - View generated sentence explanation article with TTS audio
+- `/explanation/:taskId/video` - Sentence explanation video page
+- `/text-transfer` - Text style transfer tool (参考图样式迁移到目标图)
 - `/history` - Task history list
 - `/about` - About page
-- `/sentence-explanation/:taskId` - View generated sentence explanation article with TTS audio
 
 ### Important Implementation Details
 
@@ -98,7 +103,7 @@ npm run test:watch
 
 **Text Analysis Contract**: `src/lib/text-analysis-contract.ts` defines the schema for AI-generated content including translations, grammar analysis, vocabulary cards, and IELTS tips.
 
-**Environment Variables**: The text analysis plugin reads `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`, `CLAUDE_AGENT_SDK_ENABLED`, `CLAUDE_AGENT_SDK_TIMEOUT_MS`, `ANTHROPIC_HTTP_TIMEOUT_MS`, and `ANTHROPIC_HTTP_MAX_RETRIES` from environment variables.
+**Environment Variables**: The text analysis plugin reads `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`, `CLAUDE_AGENT_SDK_ENABLED`, `CLAUDE_AGENT_SDK_TIMEOUT_MS`, `ANTHROPIC_HTTP_TIMEOUT_MS`, and `ANTHROPIC_HTTP_MAX_RETRIES` from environment variables. The xiaohongshu analysis service additionally supports `OPENAI_API_KEY`, `OPENAI_API_BASE`, `OPENAI_MODEL`, `Kimi_API_KEY`, `Kimi_API_BASE`, and `Kimi_MODEL` for multi-provider support (Anthropic-compatible or OpenAI-compatible endpoints).
 
 **Lovable Integration**: This project was scaffolded with Lovable (lovable.dev). The `lovable-tagger` plugin is active in development mode for component tagging.
 
@@ -124,12 +129,50 @@ npm run test:watch
 
 **Text Line Normalization**: `sentence-explanation-contract.ts` contains `normalizeSentenceExplanationLines()` with punctuation-aware splitting at natural pause positions. Default max line length is 50 characters. Use `stripSentenceExplanationLineEndingPunctuation()` for subtitle text.
 
-**Skills Directory**: AI capabilities live in `.claude/skills/` (e.g., `english-sentence-explanation`, `sentence-explanation-tts`, `sentence-explanation-video`). Each skill has its own SKILL.md, evals, and scripts.
+**Skills Directory**: AI capabilities live in `.claude/skills/` (e.g., `english-sentence-explanation`, `sentence-explanation-tts`, `sentence-explanation-video`, `xiaohongshu-sentence-analysis`). Each skill has its own SKILL.md, evals, and scripts.
 
 **Audio Timing**: Video export uses `HTMLAudioElement` with `preload="metadata"` to load audio durations. Timeout is 15 seconds (`AUDIO_METADATA_TIMEOUT_MS`).
+
+**Image Storage Layers**: Three layers handle image/asset storage:
+1. `src/lib/browser-image-store.ts` — IndexedDB-based local store (`english-flow-assets` DB, version 2). Stores reference assets, generated images, sentence-explanation audio, and videos in four named object stores.
+2. `src/lib/supabase-image-store.ts` — Cloud store; uploads to Supabase Storage when env vars are set.
+3. `src/lib/image-store.ts` — Unified abstraction that routes reads/writes between local and cloud storage based on `preferredStorage` config.
+
+**IndexedDB Asset Key Format**: Reference assets and generated images are stored in IndexedDB with composite keys in the format `${id}/${fileName}` (e.g., `abc123/image.png`). Hydration lookups in `task-store.ts` (`hydrateReferenceImages`, `hydrateGeneratedImages`, `hydrateHistoryPreviewTasks`) must use this same composite key format — using only `id` will cause hydration misses.
+
+**Lost-Image Fallback UI**: `CreateTask.tsx` renders a placeholder card ("图片数据已丢失 / 请重新上传图片") when `asset.dataUrl` is absent. Apply this same pattern whenever displaying a `ReferenceAsset` that may not have its `dataUrl` hydrated yet.
+
+**Article Edit Utilities**: `src/lib/sentence-explanation-article-edit.ts` provides helpers for editing `SentenceExplanationArticle` fields (introduction, conclusion, section content) while keeping line normalization and word-count totals consistent.
+
+**Image Generation Subagents**: `server/agents/` contains five subagent implementations, one per module:
+- `page11-image-agent.ts` — translation (6-panel)
+- `page221-image-agent.ts` — grammar analysis (4-panel)
+- `page222-image-agent.ts` — grammar summary (2-panel)
+- `page31-image-agent.ts` — vocabulary (6-panel)
+- `page41-image-agent.ts` — IELTS tips (4-panel)
+All are exported via `server/agents/index.ts` and called by `server/image-generation-service.ts`.
+
+**Text Transfer Feature**: `src/pages/TextTransferPage.tsx` (`/text-transfer` route) provides a standalone image text-style-transfer workspace. Supports `embedded` prop for embedding in other pages. Default image ratio is `16:9` (see `DEFAULT_RATIO` in `src/lib/text-transfer-contract.ts`). State is persisted under `text-transfer.lastState` in localStorage. Max upload size: 3MB per image. A `DEFAULT_PROMPT` constant in `TextTransferPage.tsx` provides the initial example prompt shown to new users.
+
+**Media Utils**: `src/lib/media-utils.ts` provides shared media utilities: `downloadAllImages()` for batch image download, `downloadXiaohongshuText()` for exporting xiaohongshu analysis results as a `.txt` file, `sharePage()` for native share/clipboard, and `normalizeImageSourceToDataUrl()` for converting SVG/URL image sources to PNG data URLs via canvas.
+
+**Xiaohongshu Analysis Feature**: Generates small-red-book (小红书) style Chinese educational content for English sentences extracted from classic literature. The feature follows the standard contract-first pattern:
+- `src/lib/xiaohongshu-analysis-contract.ts` — defines `XiaohongshuAnalysisRequest` (sentence, bookName, author) and `XiaohongshuAnalysisResponse` (titles: string[], content: string)
+- `src/lib/xiaohongshu-analysis-client.ts` — frontend fetch wrapper calling `POST /api/xiaohongshu-analysis`
+- `server/xiaohongshu-analysis-service.ts` — backend logic; supports both Anthropic-compatible and OpenAI-compatible providers; defaults to Kimi (`kimi-for-coding` model); parses the structured LLM response into 5 titles + body content
+- `server/xiaohongshu-analysis-plugin.ts` — registers the `/api/xiaohongshu-analysis` Vite middleware
+- `.claude/skills/xiaohongshu-sentence-analysis/` — Claude Code skill for generating this content directly via the LLM without the server stack
+- `public/ref/xiaohongshu-english-analyzer/` — reference scripts for standalone API usage
+- The analysis panel is rendered inline on the `TaskExecution` page (`/task/:taskId`) and uses `downloadXiaohongshuText()` from `src/lib/media-utils.ts` to export results
+- The panel's `loading/error/result/expanded` state is local component state in `TaskExecution.tsx` — it is not persisted and resets on navigation.
 
 ## Custom Agents
 
 - Custom Claude Code agent specs live in `.claude/agents/`.
 - The CEO orchestration agent is defined in `.claude/agents/ceo.md`.
 - This CEO agent is opt-in only: it should respond only when the user explicitly mentions `CEO`.
+- CEO Rule 8: requests to "update CLAUDE.md" are routed to `pe-lead`, which invokes the `claude-md-management:revise-claude-md` skill.
+
+## Updating CLAUDE.md
+
+To update this file with learnings from the current session, invoke the `claude-md-management:revise-claude-md` skill. This is the standard way to keep CLAUDE.md current — do not hand-edit it ad hoc. The skill reads changed files, compares against existing documentation, and proposes targeted additions before writing.

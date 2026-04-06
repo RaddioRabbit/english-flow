@@ -208,6 +208,27 @@ export async function downloadAllImages(images: GeneratedImage[]) {
   await Promise.all(images.map((image) => downloadGeneratedImage(image)));
 }
 
+export function downloadXiaohongshuText(
+  result: { titles: string[]; content: string },
+  fileName = "xiaohongshu-analysis.txt",
+) {
+  const lines = [
+    "小红书文案生成",
+    "",
+    "=== 推荐标题 ===",
+    "",
+    ...result.titles,
+    "",
+    "=== 正文分析 ===",
+    "",
+    result.content,
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  downloadUrl(url, fileName);
+  URL.revokeObjectURL(url);
+}
+
 export async function sharePage(title: string, url: string) {
   if (navigator.share) {
     await navigator.share({ title, url });

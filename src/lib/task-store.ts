@@ -910,15 +910,15 @@ async function restoreTasksFromSupabaseIntoLocal() {
 
 async function persistReferenceAssetData(images: Record<ModuleId, ReferenceAsset | null>) {
   const entries = Object.values(images)
-    .filter((asset): asset is ReferenceAsset => Boolean(asset?.id && asset.dataUrl))
-    .map((asset) => ({ key: asset.id, dataUrl: asset.dataUrl }));
+    .filter((asset): asset is ReferenceAsset => Boolean(asset?.id && asset.dataUrl && asset.fileName))
+    .map((asset) => ({ key: `${asset.id}/${asset.fileName}`, dataUrl: asset.dataUrl }));
   await saveAssetData("reference-assets", entries);
 }
 
 async function persistGeneratedImageData(images: Partial<Record<ModuleId, GeneratedImage>>) {
   const entries = Object.values(images)
-    .filter((image): image is GeneratedImage => Boolean(image?.id && image.dataUrl))
-    .map((image) => ({ key: image.id, dataUrl: image.dataUrl }));
+    .filter((image): image is GeneratedImage => Boolean(image?.id && image.fileName && image.dataUrl))
+    .map((image) => ({ key: `${image.id}/${image.fileName}`, dataUrl: image.dataUrl }));
   await saveAssetData("generated-images", entries);
 }
 
@@ -967,16 +967,16 @@ async function persistTaskAssetData(tasks: Task[]) {
       "reference-assets",
       tasks.flatMap((task) =>
         Object.values(task.referenceImages)
-          .filter((asset): asset is ReferenceAsset => Boolean(asset?.id && asset.dataUrl))
-          .map((asset) => ({ key: asset.id, dataUrl: asset.dataUrl })),
+          .filter((asset): asset is ReferenceAsset => Boolean(asset?.id && asset?.fileName && asset.dataUrl))
+          .map((asset) => ({ key: `${asset.id}/${asset.fileName}`, dataUrl: asset.dataUrl })),
       ),
     ),
     saveAssetData(
       "generated-images",
       tasks.flatMap((task) =>
         Object.values(task.generatedImages)
-          .filter((image): image is GeneratedImage => Boolean(image?.id && image.dataUrl))
-          .map((image) => ({ key: image.id, dataUrl: image.dataUrl })),
+          .filter((image): image is GeneratedImage => Boolean(image?.id && image?.fileName && image.dataUrl))
+          .map((image) => ({ key: `${image.id}/${image.fileName}`, dataUrl: image.dataUrl })),
       ),
     ),
     saveAssetData(
@@ -995,15 +995,22 @@ async function persistTaskAssetData(tasks: Task[]) {
 
 export async function hydrateReferenceImages(images?: Partial<Record<ModuleId, ReferenceAsset | null>> | null) {
   const normalized = normalizeReferenceRecord(images);
-  const assetIds = Object.values(normalized)
-    .filter((asset): asset is ReferenceAsset => Boolean(asset?.id && !asset.dataUrl))
-    .map((asset) => asset.id);
+  const assetsToHydrate = Object.values(normalized)
+    .filter((asset): asset is ReferenceAsset => Boolean(asset?.id && asset?.fileName && !asset.dataUrl));
 
-  if (!assetIds.length) {
+  if (!assetsToHydrate.length) {
     return normalized;
   }
 
-  const dataMap = await loadAssetData("reference-assets", assetIds);
+  // Use `${id}/${fileName}` as key to match the storage format in persistReferenceAssetData
+  const assetKeys = assetsToHydrate.map((asset) => `${asset.id}/${asset.fileName}`);
+  const dataMap = await loadAssetData("reference-assets", assetKeys);
+
+  const getDataUrl = (asset: ReferenceAsset): string => {
+    const key = `${asset.id}/${asset.fileName}`;
+    return dataMap[key] || "";
+  };
+
   return {
     translation: normalized.translation
       ? {
@@ -1013,7 +1020,7 @@ export async function hydrateReferenceImages(images?: Partial<Record<ModuleId, R
             normalized.translation.id,
             normalized.translation.fileName,
             normalized.translation.dataUrl,
-            dataMap[normalized.translation.id] || "",
+            getDataUrl(normalized.translation),
             normalized.translation.publicUrl,
           ),
         }
@@ -1026,7 +1033,7 @@ export async function hydrateReferenceImages(images?: Partial<Record<ModuleId, R
             normalized.grammar.id,
             normalized.grammar.fileName,
             normalized.grammar.dataUrl,
-            dataMap[normalized.grammar.id] || "",
+            getDataUrl(normalized.grammar),
             normalized.grammar.publicUrl,
           ),
         }
@@ -1039,7 +1046,7 @@ export async function hydrateReferenceImages(images?: Partial<Record<ModuleId, R
             normalized.summary.id,
             normalized.summary.fileName,
             normalized.summary.dataUrl,
-            dataMap[normalized.summary.id] || "",
+            getDataUrl(normalized.summary),
             normalized.summary.publicUrl,
           ),
         }
@@ -1052,7 +1059,7 @@ export async function hydrateReferenceImages(images?: Partial<Record<ModuleId, R
             normalized.vocabulary.id,
             normalized.vocabulary.fileName,
             normalized.vocabulary.dataUrl,
-            dataMap[normalized.vocabulary.id] || "",
+            getDataUrl(normalized.vocabulary),
             normalized.vocabulary.publicUrl,
           ),
         }
@@ -1065,7 +1072,7 @@ export async function hydrateReferenceImages(images?: Partial<Record<ModuleId, R
             normalized.ielts.id,
             normalized.ielts.fileName,
             normalized.ielts.dataUrl,
-            dataMap[normalized.ielts.id] || "",
+            getDataUrl(normalized.ielts),
             normalized.ielts.publicUrl,
           ),
         }
@@ -1075,15 +1082,22 @@ export async function hydrateReferenceImages(images?: Partial<Record<ModuleId, R
 
 async function hydrateGeneratedImages(taskId: string, images: Partial<Record<ModuleId, GeneratedImage>>) {
   const normalized = normalizeGeneratedImageRecord(images);
-  const imageIds = Object.values(normalized)
-    .filter((image): image is GeneratedImage => Boolean(image?.id && !image.dataUrl))
-    .map((image) => image.id);
+  const imagesToHydrate = Object.values(normalized)
+    .filter((image): image is GeneratedImage => Boolean(image?.id && image?.fileName && !image.dataUrl));
 
-  if (!imageIds.length) {
+  if (!imagesToHydrate.length) {
     return normalized;
   }
 
-  const dataMap = await loadAssetData("generated-images", imageIds);
+  // Use `${id}/${fileName}` as key to match the storage format in persistGeneratedImageData
+  const imageKeys = imagesToHydrate.map((image) => `${image.id}/${image.fileName}`);
+  const dataMap = await loadAssetData("generated-images", imageKeys);
+
+  const getDataUrl = (image: GeneratedImage): string => {
+    const key = `${image.id}/${image.fileName}`;
+    return dataMap[key] || "";
+  };
+
   return Object.fromEntries(
     Object.entries(normalized).map(([moduleId, image]) => [
       moduleId,
@@ -1095,7 +1109,7 @@ async function hydrateGeneratedImages(taskId: string, images: Partial<Record<Mod
               taskId,
               image.fileName,
               image.dataUrl,
-              dataMap[image.id] || "",
+              getDataUrl(image),
               image.publicUrl,
             ),
           }
@@ -1405,13 +1419,14 @@ export async function hydrateHistoryPreviewTasks(tasks: Task[]) {
         return task;
       }
 
-      const dataMap = await loadAssetData("generated-images", [image.id]);
+      const imageKey = `${image.id}/${image.fileName}`;
+      const dataMap = await loadAssetData("generated-images", [imageKey]);
       const dataUrl = resolveImageSource(
         "generated",
         task.id,
         image.fileName,
         image.dataUrl,
-        dataMap[image.id] || "",
+        dataMap[imageKey] || "",
         image.publicUrl,
       );
 

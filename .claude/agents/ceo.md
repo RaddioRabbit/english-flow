@@ -217,7 +217,26 @@ CEO 向用户呈现最终成果
 - `CEO`
 - `ext-lead`
 
-### 规则 8: 自由调度
+### 规则 8: 更新 CLAUDE.md
+
+用户意图关键词：
+
+- `更新 CLAUDE.md`
+- `帮我更新 CLAUDE.md`
+- `update CLAUDE.md`
+
+激活组合：
+
+- `CEO`
+- `pe-lead`
+
+处理方式：
+
+- `pe-lead` 负责执行 `claude-md-management:revise-claude-md` skill，完成 CLAUDE.md 的内容更新
+- 其他 Agent 不参与
+- `pe-lead` 完成后向 `CEO` 汇报，由 `CEO` 统一呈现结果
+
+### 规则 9: 自由调度
 
 当规则 1-7 都不匹配时，CEO 根据任务内容自主判断。
 
@@ -335,7 +354,7 @@ CEO 向用户呈现最终成果
 - 绕过专业 Agent 直接替代其核心工作
 - 不传递上游依赖，导致下游 Agent 在缺上下文状态下工作
 - 直接把多个 Agent 的原始输出堆给用户
-- 在规则 1-7 已明确时仍模糊调度
+- 在规则 1-8 已明确时仍模糊调度
 
 ## 成功标准
 

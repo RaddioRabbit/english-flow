@@ -18,7 +18,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { isSupabaseConfigured } from "@/lib/image-store";
-import { downloadAllImages, sharePage } from "@/lib/media-utils";
+import { downloadAllImages, downloadXiaohongshuText, sharePage } from "@/lib/media-utils";
 import { sentenceExplanationModuleOrder } from "@/lib/sentence-explanation-contract";
 import { analyzeTaskTextContent, estimateParsingProgressPercentage } from "@/lib/task-text-analysis";
 import {
@@ -35,6 +35,9 @@ import {
   useHydratedTask,
 } from "@/lib/task-store";
 import { useImageGeneration } from "@/lib/use-image-generation";
+import { generateXiaohongshuAnalysis } from "@/lib/xiaohongshu-analysis-client";
+import type { XiaohongshuAnalysisResponse } from "@/lib/xiaohongshu-analysis-contract";
+import { Sparkles } from "lucide-react";
 
 function StepIcon({ status }: { status: "pending" | "running" | "done" | "error" }) {
   if (status === "done") return <CheckCircle2 className="h-5 w-5 text-success" />;
@@ -69,6 +72,33 @@ export default function TaskExecutionPage() {
   const startedGenerationKeyRef = useRef<string | null>(null);
   const autoSyncAttemptKeyRef = useRef<string>("");
   const { state, generateImages, reset } = useImageGeneration();
+  const [xiaohongshuState, setXiaohongshuState] = useState<{
+    loading: boolean;
+    error: string;
+    result: XiaohongshuAnalysisResponse | null;
+    expanded: boolean;
+  }>({ loading: false, error: "", result: null, expanded: false });
+
+  const handleGenerateXiaohongshu = async () => {
+    if (!task || xiaohongshuState.loading) return;
+
+    setXiaohongshuState((prev) => ({ ...prev, loading: true, error: "" }));
+
+    try {
+      const result = await generateXiaohongshuAnalysis({
+        sentence: task.sentence,
+        bookName: task.bookName,
+        author: task.author,
+      });
+      setXiaohongshuState((prev) => ({ ...prev, loading: false, result }));
+    } catch (err) {
+      setXiaohongshuState((prev) => ({
+        ...prev,
+        loading: false,
+        error: err instanceof Error ? err.message : "小红书文案生成失败，请稍后重试。",
+      }));
+    }
+  };
 
   useEffect(() => {
     if (!task || task.status !== "parsing") {
@@ -578,6 +608,25 @@ export default function TaskExecutionPage() {
                   </div>
                 ) : null}
               </section>
+
+              <section className="rounded-2xl border border-border bg-card p-6 shadow-elegant">
+                <h2 className="font-display text-xl font-semibold">当前任务配置</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {task.modules.map((moduleId) => (
+                    <span key={moduleId} className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+                      {moduleTitle(moduleId)}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-5 space-y-3">
+                  {Object.entries(task.referenceImages).map(([key, asset]) => (
+                    <div key={key} className="flex items-center justify-between rounded-xl border border-border bg-secondary/20 px-4 py-3 text-sm">
+                      <span>{moduleTitle(key as keyof typeof task.referenceImages)}</span>
+                      <span className="text-muted-foreground">{asset ? `${asset.fileName}${asset.dataUrl ? "" : "（载入中）"}` : "未上传参考图"}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
             </div>
 
             <div className="space-y-6">
@@ -617,23 +666,97 @@ export default function TaskExecutionPage() {
               </section>
 
               <section className="rounded-2xl border border-border bg-card p-6 shadow-elegant">
-                <h2 className="font-display text-xl font-semibold">当前任务配置</h2>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {task.modules.map((moduleId) => (
-                    <span key={moduleId} className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-                      {moduleTitle(moduleId)}
-                    </span>
-                  ))}
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h2 className="font-display text-xl font-semibold">小红书文案生成</h2>
+                    <p className="text-sm text-muted-foreground">一键生成适合小红书发布的标题与句子分析。</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleGenerateXiaohongshu()}
+                    disabled={xiaohongshuState.loading}
+                  >
+                    {xiaohongshuState.loading ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-1 h-4 w-4" />
+                    )}
+                    {xiaohongshuState.loading ? "正在生成..." : "生成小红书文案"}
+                  </Button>
                 </div>
-                <div className="mt-5 space-y-3">
-                  {Object.entries(task.referenceImages).map(([key, asset]) => (
-                    <div key={key} className="flex items-center justify-between rounded-xl border border-border bg-secondary/20 px-4 py-3 text-sm">
-                      <span>{moduleTitle(key as keyof typeof task.referenceImages)}</span>
-                      <span className="text-muted-foreground">{asset ? `${asset.fileName}${asset.dataUrl ? "" : "（载入中）"}` : "未上传参考图"}</span>
+
+                {xiaohongshuState.error ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    {xiaohongshuState.error}
+                  </div>
+                ) : null}
+
+                {xiaohongshuState.result ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-foreground">推荐标题</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            xiaohongshuState.result &&
+                            downloadXiaohongshuText(
+                              xiaohongshuState.result,
+                              `xiaohongshu-${task.id}.txt`,
+                            )
+                          }
+                        >
+                          <Download className="mr-1 h-4 w-4" />
+                          一键下载
+                        </Button>
+                      </div>
+                      <div className="grid gap-2">
+                        {xiaohongshuState.result.titles.map((title, index) => (
+                          <div
+                            key={index}
+                            className="rounded-xl border border-border bg-secondary/20 px-3 py-2 text-sm text-foreground"
+                          >
+                            {title}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="rounded-xl border border-border bg-secondary/20">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setXiaohongshuState((prev) => ({ ...prev, expanded: !prev.expanded }))
+                        }
+                        className="flex w-full items-center justify-between px-4 py-3 text-left"
+                      >
+                        <span className="text-sm font-medium text-foreground">正文分析</span>
+                        {xiaohongshuState.expanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                      {xiaohongshuState.expanded ? (
+                        <div className="border-t border-border px-4 pb-4 pt-2">
+                          <pre className="whitespace-pre-wrap text-sm leading-6 text-foreground font-sans">
+                            {xiaohongshuState.result.content}
+                          </pre>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border bg-secondary/10 px-6 py-10 text-center text-sm text-muted-foreground">
+                    {xiaohongshuState.loading
+                      ? "正在调用大模型生成小红书文案，请稍候..."
+                      : "点击上方按钮生成小红书文案。"}
+                  </div>
+                )}
               </section>
+
             </div>
           </div>
         </motion.div>

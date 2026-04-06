@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, ImagePlus, Loader2, Sparkles, Wand2 } from "lucide-react";
+import { Download, ImagePlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,16 @@ import { transferTextStyle } from "@/lib/text-transfer-client";
 import { SUPPORTED_RATIOS, DEFAULT_RATIO, type SupportedRatio } from "@/lib/text-transfer-contract";
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB base64 length guard
+
+const STORAGE_KEY = "text-transfer.lastState";
+const DEFAULT_PROMPT =
+  '将参考图片中的文字"品读《绿山墙的安妮》在温柔文字中积累地道英语 30天精读30个经典句子 Day 01"放到目标图片上，只是把"Day 01"改为"Day 06"，其他的视觉元素保持不变';
+
+type PersistedState = {
+  refImage: UploadedImage | null;
+  targetImage: UploadedImage | null;
+  prompt: string;
+};
 
 type UploadedImage = {
   dataUrl: string;
@@ -105,10 +115,29 @@ function ImageUploadZone({
   );
 }
 
+function loadPersistedState(): PersistedState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as PersistedState;
+  } catch {
+    // ignore parse errors
+  }
+  return { refImage: null, targetImage: null, prompt: DEFAULT_PROMPT };
+}
+
+function savePersistedState(state: PersistedState) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore quota errors
+  }
+}
+
 export function TextTransferWorkspace({ embedded = false }: { embedded?: boolean }) {
-  const [refImage, setRefImage] = useState<UploadedImage | null>(null);
-  const [targetImage, setTargetImage] = useState<UploadedImage | null>(null);
-  const [prompt, setPrompt] = useState("");
+  const initial = loadPersistedState();
+  const [refImage, setRefImage] = useState<UploadedImage | null>(initial.refImage);
+  const [targetImage, setTargetImage] = useState<UploadedImage | null>(initial.targetImage);
+  const [prompt, setPrompt] = useState(initial.prompt || DEFAULT_PROMPT);
   const [ratio, setRatio] = useState<SupportedRatio>(DEFAULT_RATIO);
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -128,6 +157,10 @@ export function TextTransferWorkspace({ embedded = false }: { embedded?: boolean
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [loading]);
+
+  useEffect(() => {
+    savePersistedState({ refImage, targetImage, prompt });
+  }, [refImage, targetImage, prompt]);
 
   const canSubmit = !!refImage && !!targetImage && !!prompt.trim() && !loading;
 
@@ -174,16 +207,9 @@ export function TextTransferWorkspace({ embedded = false }: { embedded?: boolean
   const content = (
     <div className="space-y-8">
       <div>
-        <div className="flex items-center gap-2 text-sm font-medium text-accent">
-          <Sparkles className="h-4 w-4" />
-          模拟 Claude Code 调用 `aifast-text-transfer-editor`
-        </div>
-        <h1 className={cn("mt-2 font-display font-bold text-foreground", embedded ? "text-3xl" : "text-2xl")}>
+        <h1 className={cn("font-display font-bold text-foreground", embedded ? "text-3xl" : "text-2xl")}>
           参考图样式迁移到目标图
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          上传一张参考图、一张要更改的图，再写一句 prompt，系统会按本地 skill 的方式组装指令并生成更改后的结果图。
-        </p>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -201,20 +227,6 @@ export function TextTransferWorkspace({ embedded = false }: { embedded?: boolean
           onUpload={setTargetImage}
           disabled={loading}
         />
-      </div>
-
-      <div className="rounded-2xl border border-border bg-muted/30 p-4">
-        <div className="flex items-start gap-3">
-          <div className="rounded-full bg-primary/10 p-2 text-primary">
-            <Wand2 className="h-4 w-4" />
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Prompt 会直接参与 skill 调用</p>
-            <p className="text-sm text-muted-foreground">
-              例：把第一张图的文字风格迁移到第二张图，把 “Day 01” 改成 “Day 05”，其余构图和背景尽量保持不变。
-            </p>
-          </div>
-        </div>
       </div>
 
       <div className="space-y-1.5">

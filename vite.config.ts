@@ -8,6 +8,7 @@ import { sentenceExplanationApiPlugin } from "./server/sentence-explanation-plug
 import { sentenceExplanationTtsApiPlugin } from "./server/sentence-explanation-tts-plugin";
 import { sentenceExplanationVideoApiPlugin } from "./server/sentence-explanation-video-plugin";
 import { textTransferApiPlugin } from "./server/text-transfer-plugin";
+import { xiaohongshuAnalysisApiPlugin } from "./server/xiaohongshu-analysis-plugin";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -30,6 +31,7 @@ export default defineConfig(({ mode }) => {
       sentenceExplanationTtsApiPlugin(env),
       sentenceExplanationVideoApiPlugin(),
       textTransferApiPlugin(),
+      xiaohongshuAnalysisApiPlugin(env),
       mode === "development" && componentTagger(),
     ].filter(Boolean),
     resolve: {

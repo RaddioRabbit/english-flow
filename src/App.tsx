@@ -26,7 +26,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<CreateTaskPage />} />
             <Route path="/sentence-agent" element={<CreateTaskPage />} />
             <Route path="/create-task" element={<CreateTaskPage />} />
             <Route path="/edit/:taskId" element={<EditTaskPage />} />
