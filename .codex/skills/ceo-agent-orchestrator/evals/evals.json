@@ -1,0 +1,248 @@
+{
+  "skill_name": "ceo-agent-orchestrator",
+  "description": "测试 CEO 本地决策、CEO 调度 specialist，以及 specialist 使用各自真实 skills 的能力",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "ceo-local-strategy-review",
+      "prompt": "ceo,帮我判断这个 AI SaaS 方向值不值得做",
+      "expected_output": "CEO 被激活并留在本地，使用 office-hours 或 plan-ceo-review，不派遣其他 agent",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ceo_uses_own_skills",
+          "description": "CEO 应该调用自己的默认 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["office-hours", "plan-ceo-review", "autoplan"]
+        },
+        {
+          "name": "ceo_does_not_dispatch",
+          "description": "这种策略评审不应派遣 specialist",
+          "type": "content_check",
+          "target": "response",
+          "condition": "not_contains",
+          "expected": ["cp-lead", "xd-lead", "cp-arch", "qa-lead", "pe-lead", "ext-lead"]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "ceo-prd-task",
+      "prompt": "ceo,帮我写一个用户登录功能的 PRD 文档",
+      "expected_output": "CEO 被激活，派遣 cp-lead 完成 PRD，并明确要求使用 cp-lead 真实存在的 skills",
+      "files": [],
+      "assertions": [
+        {
+          "name": "cp_lead_dispatched",
+          "description": "应该派遣 cp-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "cp-lead"
+        },
+        {
+          "name": "cp_lead_real_skills",
+          "description": "应该点名 cp-lead 的真实 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["office-hours", "plan-ceo-review", "autoplan"]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "ceo-ui-design-task",
+      "prompt": "CEO帮我设计一个首页的 UI 界面",
+      "expected_output": "CEO 被激活，派遣 xd-lead 完成设计，并明确要求使用 xd-lead 真实存在的 skills",
+      "files": [],
+      "assertions": [
+        {
+          "name": "xd_lead_dispatched",
+          "description": "应该派遣 xd-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "xd-lead"
+        },
+        {
+          "name": "xd_lead_real_skills",
+          "description": "应该点名 xd-lead 的真实 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["design-consultation", "design-shotgun", "design-review", "design-html", "qa-only"]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "ceo-feature-implementation",
+      "prompt": "ceo,实现一个待办事项添加功能",
+      "expected_output": "CEO 被激活，按 ceo.toml 的默认路由派遣 xd-lead 和 cp-arch，并让两者都只使用真实存在的 skills",
+      "files": [],
+      "assertions": [
+        {
+          "name": "feature_route_matches_ceo_toml",
+          "description": "功能实现默认应走 xd-lead + cp-arch",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_all",
+          "expected": ["xd-lead", "cp-arch"]
+        },
+        {
+          "name": "implementation_real_skills",
+          "description": "应该点名实现链路中的真实 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["design-consultation", "writing-plans", "test-driven-development", "verification-before-completion"]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "ceo-bugfix-task",
+      "prompt": "CEO搞定这个登录bug",
+      "expected_output": "CEO 被激活，派遣 qa-lead 做复现与根因定位，并要求使用 qa-lead 真实存在的质量类 skills",
+      "files": [],
+      "assertions": [
+        {
+          "name": "qa_lead_dispatched",
+          "description": "应该派遣 qa-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "qa-lead"
+        },
+        {
+          "name": "qa_skill_invoked",
+          "description": "应该提到 qa-lead 的真实 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["investigate", "review", "qa", "systematic-debugging", "verification-before-completion"]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "eval_name": "ceo-deploy-task",
+      "prompt": "ceo,部署这个应用到生产环境",
+      "expected_output": "CEO 被激活，派遣 pe-lead 执行部署，并要求使用 pe-lead 真实存在的发布类 skills",
+      "files": [],
+      "assertions": [
+        {
+          "name": "pe_lead_dispatched",
+          "description": "应该派遣 pe-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "pe-lead"
+        },
+        {
+          "name": "deploy_skill_invoked",
+          "description": "应该提到 pe-lead 的真实 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["ship", "land-and-deploy", "setup-deploy", "canary", "document-release"]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "eval_name": "ceo-skill-development",
+      "prompt": "CEO，帮我创建一个新的Agent Skill用于数据分析",
+      "expected_output": "CEO 被激活，派遣 ext-lead 处理 skill 开发，并要求使用 ext-lead 真实存在的 skills",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ext_lead_dispatched",
+          "description": "应该派遣 ext-lead",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "ext-lead"
+        },
+        {
+          "name": "ext_lead_real_skills",
+          "description": "应该提到 ext-lead 的真实 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["skill-creator", "writing-skills", "using-superpowers", "plugin-creator"]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "ceo-end-to-end-product",
+      "prompt": "CEO，从零开始完整实现一个博客系统",
+      "expected_output": "CEO 被激活，按最小必要组合派遣 cp-lead、xd-lead、cp-arch，并要求各阶段回到 CEO 再继续下一跳",
+      "files": [],
+      "assertions": [
+        {
+          "name": "full_pipeline_dispatched",
+          "description": "从零实现产品应至少派遣 cp-lead、xd-lead、cp-arch",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_all",
+          "expected": ["cp-lead", "xd-lead", "cp-arch"]
+        },
+        {
+          "name": "real_skills_across_stages",
+          "description": "应该提到多阶段中的真实 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["office-hours", "design-consultation", "writing-plans", "test-driven-development"]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "ceo-dispatch-keyword",
+      "prompt": "调度cp-lead来做产品规划",
+      "expected_output": "CEO 被 '调度' 关键词激活，派遣 cp-lead 完成产品规划",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ceo_activated_by_dispatch",
+          "description": "CEO 应该被 '调度' 关键词激活",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains",
+          "expected": "cp-lead"
+        },
+        {
+          "name": "cp_lead_skill_still_real",
+          "description": "即使是关键字触发，也必须点名 cp-lead 的真实 skills",
+          "type": "content_check",
+          "target": "response",
+          "condition": "contains_any",
+          "expected": ["office-hours", "plan-ceo-review", "autoplan"]
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "direct-agent-no-ceo",
+      "prompt": "cp-lead帮我写个PRD",
+      "expected_output": "CEO 不应该被激活，只有 cp-lead 直接响应",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ceo_not_activated",
+          "description": "用户直接点名 specialist 时 CEO 不应该介入",
+          "type": "content_check",
+          "target": "response",
+          "condition": "not_contains",
+          "expected": ["CEO", "派遣", "调度", "统一汇总"]
+        }
+      ]
+    }
+  ]
+}

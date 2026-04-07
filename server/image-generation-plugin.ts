@@ -8,15 +8,22 @@ import {
   type ImageGenerationRequest,
 } from "./image-generation-service";
 import { installAIFASTImageSkillShim } from "./aifast-image-skill-shim";
+import { installTranslationImageHighlightsSkillShim } from "./translation-image-highlights-skill-shim";
 
 interface ImageGenerationPluginEnv {
   // 可以添加图像生成相关的环境变量配置
   IMAGE_GENERATION_TIMEOUT_MS?: string;
   IMAGE_GENERATION_MAX_RETRIES?: string;
+  ANTHROPIC_API_KEY?: string;
+  ANTHROPIC_BASE_URL?: string;
+  ANTHROPIC_MODEL?: string;
+  ANTHROPIC_HTTP_TIMEOUT_MS?: string;
+  ANTHROPIC_HTTP_MAX_RETRIES?: string;
 }
 
 export function imageGenerationApiPlugin(env: ImageGenerationPluginEnv): Plugin {
   installAIFASTImageSkillShim();
+  installTranslationImageHighlightsSkillShim(env);
 
   return {
     name: "image-generation-api",

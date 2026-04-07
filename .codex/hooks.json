@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; /usr/bin/python3 \"$ROOT/.codex/hooks/session-start.py\"'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; bash \"$ROOT/.codex/hooks/figma-post-tool-use.sh\"'"
+          }
+        ]
+      }
+    ]
+  }
+}

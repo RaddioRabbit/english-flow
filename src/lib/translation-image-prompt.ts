@@ -198,6 +198,19 @@ function buildPanelInstruction(index: number, language: "英文" | "中文", tex
   return `第${index}格使用羊皮纸卷轴文本框，只展示这段${language}内容，不要添加任何标题、标签、编号、引号、解释或额外文字：${text}`;
 }
 
+export function buildTranslationSceneOnlyPrompt(originSentence: string): string {
+  const sceneReference = sanitizeSceneReference(originSentence);
+  return [
+    "请生成一张竖版 3:4 的英语教学插画，整张图片是一个单一叙事场景，无任何文字宫格分割。",
+    "风格：复古旧纸背景、温暖柔和配色、写实细腻线条、适合小红书英语学习内容。",
+    "只绘制英语原句真实描述的场景，只保留与原句直接相关的人物、动作、环境、时间氛围和关键物体。",
+    "不要加入任何无关剧情、无关角色、无关动物、无关道具、无关说明牌或装饰性标题框。",
+    "图片里不要出现任何文字元素，包括标题、横幅、字幕、对白、旁白、标签、书名、作者名、英语原句、中文翻译、部分编号。",
+    `依据这句英语原句来构图：${sceneReference}。这句话只用于理解场景，绝不能在画面中出现为任何文字。`,
+    "负面要求：任何文字、标题横幅、无关场景、无关人物、无关物体、画面模糊。",
+  ].join("\n");
+}
+
 export function buildTranslationImagePrompt(input: TranslationImagePromptInput) {
   const panels = prepareTranslationImagePanels(input);
   const sceneReference = sanitizeSceneReference(input.originSentence);

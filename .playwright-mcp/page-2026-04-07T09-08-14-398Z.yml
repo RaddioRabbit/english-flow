@@ -1,0 +1,189 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link "English Flow Sentence Agent" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - generic [ref=e10]:
+            - heading "English Flow" [level=1] [ref=e11]
+            - paragraph [ref=e12]: Sentence Agent
+        - navigation [ref=e13]:
+          - link "句子任务" [ref=e14] [cursor=pointer]:
+            - /url: /
+            - img [ref=e15]
+            - text: 句子任务
+          - link "图片改字" [ref=e17] [cursor=pointer]:
+            - /url: /text-transfer
+            - img [ref=e18]
+            - text: 图片改字
+          - link "历史记录" [ref=e20] [cursor=pointer]:
+            - /url: /history
+            - img [ref=e21]
+            - text: 历史记录
+          - link "关于" [ref=e25] [cursor=pointer]:
+            - /url: /about
+            - img [ref=e26]
+            - text: 关于
+    - main [ref=e28]:
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - generic [ref=e34]:
+              - generic [ref=e35]:
+                - img [ref=e36]
+                - generic [ref=e38]:
+                  - heading "输入内容" [level=2] [ref=e39]
+                  - paragraph [ref=e40]: 支持长文本输入，自动去除首尾空白。
+              - button "填充示例句子" [ref=e41] [cursor=pointer]:
+                - img
+                - text: 填充示例句子
+            - generic [ref=e42]:
+              - generic [ref=e43]:
+                - generic [ref=e44]:
+                  - generic [ref=e45]: 英语原句
+                  - generic [ref=e46]: 已输入 0 个字符
+                - textbox "英语原句" [ref=e47]:
+                  - /placeholder: 粘贴一条英语长难句，系统会自动拆句、翻译、句式分析和词汇解析。
+              - generic [ref=e48]:
+                - generic [ref=e49]:
+                  - text: 原著书名
+                  - textbox "原著书名" [ref=e50]:
+                    - /placeholder: 例如 "The Great Gatsby"
+                - generic [ref=e51]:
+                  - text: 原著作者
+                  - textbox "原著作者" [ref=e52]:
+                    - /placeholder: 例如 "F. Scott Fitzgerald"
+          - generic [ref=e53]:
+            - generic [ref=e54]:
+              - img [ref=e55]
+              - generic [ref=e58]:
+                - heading "参考图片上传" [level=2] [ref=e59]
+                - paragraph [ref=e60]: 每个模块对应 1 张参考图，刷新页面后仍会保留。
+            - generic [ref=e61]:
+              - generic [ref=e62]:
+                - generic [ref=e64]:
+                  - generic [ref=e65]: 句译对照参考图
+                  - generic [ref=e66]: 用于控制句译对照图片的风格与布局
+                - generic [ref=e68] [cursor=pointer]:
+                  - img [ref=e69]
+                  - generic [ref=e73]: 上传参考图
+                  - generic [ref=e74]: JPG / PNG / WEBP，最大 5MB
+              - generic [ref=e75]:
+                - generic [ref=e77]:
+                  - generic [ref=e78]: 句式分析参考图
+                  - generic [ref=e79]: 用于控制句式分析图片的风格与布局
+                - generic [ref=e81] [cursor=pointer]:
+                  - img [ref=e82]
+                  - generic [ref=e86]: 上传参考图
+                  - generic [ref=e87]: JPG / PNG / WEBP，最大 5MB
+              - generic [ref=e88]:
+                - generic [ref=e90]:
+                  - generic [ref=e91]: 句式总结参考图
+                  - generic [ref=e92]: 用于控制句式总结图片的风格与布局
+                - generic [ref=e94] [cursor=pointer]:
+                  - img [ref=e95]
+                  - generic [ref=e99]: 上传参考图
+                  - generic [ref=e100]: JPG / PNG / WEBP，最大 5MB
+              - generic [ref=e101]:
+                - generic [ref=e103]:
+                  - generic [ref=e104]: 词汇解析参考图
+                  - generic [ref=e105]: 用于控制词汇解析图片的风格与布局
+                - generic [ref=e107] [cursor=pointer]:
+                  - img [ref=e108]
+                  - generic [ref=e112]: 上传参考图
+                  - generic [ref=e113]: JPG / PNG / WEBP，最大 5MB
+              - generic [ref=e114]:
+                - generic [ref=e116]:
+                  - generic [ref=e117]: 雅思备考参考图
+                  - generic [ref=e118]: 用于控制雅思备考图片的风格与布局
+                - generic [ref=e120] [cursor=pointer]:
+                  - img [ref=e121]
+                  - generic [ref=e125]: 上传参考图
+                  - generic [ref=e126]: JPG / PNG / WEBP，最大 5MB
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - generic [ref=e129]:
+              - img [ref=e130]
+              - generic [ref=e133]:
+                - heading "生成模块" [level=2] [ref=e134]
+                - paragraph [ref=e135]: 至少选择 1 个模块，未勾选模块不会进入图片生成阶段。
+            - generic [ref=e136]:
+              - button "全选" [ref=e137] [cursor=pointer]
+              - button "取消全选" [ref=e138] [cursor=pointer]
+            - generic [ref=e139]:
+              - generic [ref=e140] [cursor=pointer]:
+                - checkbox "句译对照图 · 6 宫格 根据 prompt1-4 生成中英对照教学条漫。 依赖：prompt1-4" [checked] [ref=e141]:
+                  - generic:
+                    - img
+                - generic [ref=e142]:
+                  - generic [ref=e143]:
+                    - text: 句译对照图
+                    - generic [ref=e144]: · 6 宫格
+                  - generic [ref=e145]: 根据 prompt1-4 生成中英对照教学条漫。
+                  - generic [ref=e146]: 依赖：prompt1-4
+              - generic [ref=e147] [cursor=pointer]:
+                - checkbox "句式分析图 · 4 宫格 展示时态、语态和句式结构拆解。 依赖：句式分析文本" [checked] [ref=e148]:
+                  - generic:
+                    - img
+                - generic [ref=e149]:
+                  - generic [ref=e150]:
+                    - text: 句式分析图
+                    - generic [ref=e151]: · 4 宫格
+                  - generic [ref=e152]: 展示时态、语态和句式结构拆解。
+                  - generic [ref=e153]: 依赖：句式分析文本
+              - generic [ref=e154] [cursor=pointer]:
+                - checkbox "句式总结图 · 2 宫格 提炼长难句的核心结构总结。 依赖：句式分析文本" [checked] [ref=e155]:
+                  - generic:
+                    - img
+                - generic [ref=e156]:
+                  - generic [ref=e157]:
+                    - text: 句式总结图
+                    - generic [ref=e158]: · 2 宫格
+                  - generic [ref=e159]: 提炼长难句的核心结构总结。
+                  - generic [ref=e160]: 依赖：句式分析文本
+              - generic [ref=e161] [cursor=pointer]:
+                - checkbox "词汇解析图 · 6 宫格 围绕 6 个核心词汇生成可视化讲解。 依赖：词汇解析文本" [checked] [ref=e162]:
+                  - generic:
+                    - img
+                - generic [ref=e163]:
+                  - generic [ref=e164]:
+                    - text: 词汇解析图
+                    - generic [ref=e165]: · 6 宫格
+                  - generic [ref=e166]: 围绕 6 个核心词汇生成可视化讲解。
+                  - generic [ref=e167]: 依赖：词汇解析文本
+              - generic [ref=e168] [cursor=pointer]:
+                - checkbox "雅思备考图 · 4 宫格 输出听说读写四维备考建议。 依赖：雅思备考文本" [checked] [ref=e169]:
+                  - generic:
+                    - img
+                - generic [ref=e170]:
+                  - generic [ref=e171]:
+                    - text: 雅思备考图
+                    - generic [ref=e172]: · 4 宫格
+                  - generic [ref=e173]: 输出听说读写四维备考建议。
+                  - generic [ref=e174]: 依赖：雅思备考文本
+          - generic [ref=e175]:
+            - generic [ref=e176]:
+              - img [ref=e177]
+              - generic [ref=e180]:
+                - heading "开始解析" [level=2] [ref=e181]
+                - paragraph [ref=e182]: 文本解析完成后会进入编辑页，确认内容后再继续后续生成流程。
+            - generic [ref=e183]:
+              - button "文本解析 进入文本编辑页" [disabled]:
+                - generic: 文本解析
+                - generic: 进入文本编辑页
+          - generic [ref=e184]:
+            - generic [ref=e185]:
+              - img [ref=e186]
+              - generic [ref=e191]:
+                - heading "流程提示" [level=2] [ref=e192]
+                - paragraph [ref=e193]: 这个 Agent 的目标，是把 1 条英语长难句沉淀成可复用的教学资产：文本解析、模块化条漫、句子讲解文章、配音和视频，并让每一步都可追溯、可重生成。
+            - generic [ref=e194]:
+              - paragraph [ref=e195]: 1. 首页录入：填写英语原句、书名作者，上传 5 张模块参考图，勾选要产出的模块后发起文本解析。
+              - paragraph [ref=e196]: 2. 文本编辑：系统先生成翻译、分句 prompt1-4、句式分析、词汇解析和雅思建议；你可以逐段修改、保存草稿，或按单个模块 / 全部重新生成。
+              - paragraph [ref=e197]: 3. 图片生成：确认文本版本后进入任务详情页，系统按所选模块顺序生成条漫图片，实时记录日志、进度和每个模块的结果状态。
+              - paragraph [ref=e198]: 4. 结果延展：结果页支持查看源文本、下载或基于改写内容重新生成图片；当五张解析图齐全后，还能继续生成句子讲解文章、讲解配音和讲解视频。
+              - paragraph [ref=e199]: 5. 历史追溯：每次确认生成、重生成或讲解产出都会形成历史记录，可从历史记录直接回到当时的最终页面继续查看或发起新一轮生成。

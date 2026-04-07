@@ -74,6 +74,7 @@ export async function generateModuleImage(
         prompt2: textContent.prompt2,
         prompt3: textContent.prompt3,
         prompt4: textContent.prompt4,
+        vocabulary: textContent.vocabulary,
         referenceImage,
       };
       const result = await generatePage11Image(input);

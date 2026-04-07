@@ -1,0 +1,62 @@
+[features]
+codex_hooks = true
+
+[agents]
+max_threads = 6
+max_depth = 1
+
+[agents.ceo]
+description = "调度中心：只在明确点名 CEO 时做规则匹配、最小激活、跨 agent 汇总。"
+config_file = "agents/ceo.toml"
+
+[agents.cp-lead]
+description = "产品规划 agent：负责需求澄清、PRD、验收标准与 Ticket 编排。"
+config_file = "agents/cp-lead.toml"
+
+[agents.xd-lead]
+description = "设计与 UX agent：负责设计系统、交互方案、视觉审查与设计交付。"
+config_file = "agents/xd-lead.toml"
+
+[agents.cp-arch]
+description = "架构与实现 agent：负责前后端实现、调试、验证与性能收口。"
+config_file = "agents/cp-arch.toml"
+
+[agents.qa-lead]
+description = "质量门禁 agent：负责 QA、review、安全审计、根因分析与复现验证。"
+config_file = "agents/qa-lead.toml"
+
+[agents.pe-lead]
+description = "发布部署 agent：负责 ship、deploy、canary、文档与上线后验证。"
+config_file = "agents/pe-lead.toml"
+
+[agents.ext-lead]
+description = "平台能力 agent：负责 skills、plugins、MCP、hooks、复盘与工具链沉淀。"
+config_file = "agents/ext-lead.toml"
+
+# `tavily`、`chrome_devtools`、`playwright`、`vibe_kanban` 继续继承用户级配置。
+# `tavily` 依赖 API key，因此不在项目配置中重复声明。
+
+[mcp_servers.stripe]
+type = "http"
+url = "https://mcp.stripe.com"
+enabled = false
+
+[mcp_servers.supabase]
+type = "http"
+url = "https://mcp.supabase.com/mcp"
+enabled = false
+
+[mcp_servers.vercel]
+type = "http"
+url = "https://mcp.vercel.com"
+enabled = false
+
+[mcp_servers.cloudflare-api]
+type = "http"
+url = "https://mcp.cloudflare.com/mcp"
+enabled = false
+
+[mcp_servers.hf-mcp-server]
+type = "http"
+url = "https://huggingface.co/mcp?login"
+enabled = false
