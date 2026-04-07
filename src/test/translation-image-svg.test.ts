@@ -3,6 +3,24 @@ import { describe, expect, it } from "vitest";
 import { buildTranslationImageSvgDataUrl } from "@/lib/translation-image-svg";
 
 describe("buildTranslationImageSvgDataUrl", () => {
+  it("uses the updated parchment background color for the full image", () => {
+    const dataUrl = buildTranslationImageSvgDataUrl({
+      bookName: "Robinson Crusoe",
+      author: "Daniel Defoe",
+      originSentence: "After all, Xury's advice was good, and we dropped our little anchor.",
+      prompt1: "After all, Xury's advice was good,",
+      prompt2: "毕竟，休里的建议很好，",
+      prompt3: "and we dropped our little anchor.",
+      prompt4: "我们抛下了小锚。",
+      vocabulary: [],
+      sceneImageDataUrl: undefined,
+    });
+
+    const svg = decodeURIComponent(dataUrl.replace("data:image/svg+xml;charset=utf-8,", ""));
+
+    expect(svg).toContain('fill="#fbf2d5"');
+  });
+
   it("renders highlighted english and chinese text and embeds the scene image", () => {
     const dataUrl = buildTranslationImageSvgDataUrl({
       bookName: "Robinson Crusoe",

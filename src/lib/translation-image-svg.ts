@@ -33,7 +33,7 @@ const SCENE_Y = ROW2_Y + PANEL_H + GAP;      // y where scene image starts
 const COL2_X = M + PANEL_W + GAP;            // x of right column
 
 // ─── Visual constants ─────────────────────────────────────────────────────────
-const C_BG = "#1e1f2e";
+const C_BG = "#fbf2d5";
 const C_PANEL = "#f5e6c8";
 const C_BORDER = "#8b6914";
 const C_TEXT = "#2d1a08";
