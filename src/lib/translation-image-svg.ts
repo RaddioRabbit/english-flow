@@ -40,10 +40,12 @@ const C_TEXT = "#2d1a08";
 const FONT = "Georgia,'Times New Roman','PingFang SC','Hiragino Sans GB','Microsoft YaHei',serif";
 
 // ─── Font sizes ───────────────────────────────────────────────────────────────
-const EN_FS = 21;
-const ZH_FS = 23;
-const EN_LH = EN_FS * 1.75;
-const ZH_LH = ZH_FS * 1.75;
+const EN_MIN_FS = 18;
+const EN_MAX_FS = 34;
+const ZH_MIN_FS = 20;
+const ZH_MAX_FS = 36;
+const TEXT_PAD_X = Math.round(PANEL_W * 0.1);
+const TEXT_PAD_Y = Math.round(PANEL_W * 0.1);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +89,15 @@ function charWidth(ch: string, fs: number, variant: "en" | "zh"): number {
 }
 
 type LineToken = { text: string; color: string | null };
+
+function measureLineWidth(line: LineToken[], fs: number, variant: "en" | "zh") {
+  return line.reduce(
+    (total, token) =>
+      total +
+      Array.from(token.text).reduce((tokenWidth, char) => tokenWidth + charWidth(char, fs, variant), 0),
+    0,
+  );
+}
 
 /**
  * Split text (with highlight matches) into lines that fit within maxW.
@@ -160,6 +171,18 @@ function buildLines(
       }
     } else {
       // Chinese / mixed: character by character
+      if (color) {
+        const segmentWidth = Array.from(seg.text).reduce((sum, ch) => sum + charWidth(ch, fs, "zh"), 0);
+        if (segmentWidth <= maxW) {
+          if (lw > 0 && lw + segmentWidth > maxW) {
+            newLine();
+          }
+          addTok(seg.text, color);
+          lw += segmentWidth;
+          continue;
+        }
+      }
+
       for (const ch of Array.from(seg.text)) {
         const w = charWidth(ch, fs, "zh");
         if (lw > 0 && lw + w > maxW) newLine();
@@ -174,7 +197,7 @@ function buildLines(
 
 function renderLines(
   lines: LineToken[][],
-  cx: number,
+  x: number,
   startY: number,
   lh: number,
   fs: number,
@@ -190,7 +213,7 @@ function renderLines(
           return `<tspan>${escapeHtml(tok.text)}</tspan>`;
         })
         .join("");
-      return `<text x="${cx}" y="${y}" text-anchor="middle" font-family="${FONT}" font-size="${fs}" font-weight="600" fill="${C_TEXT}">${tspans}</text>`;
+      return `<text x="${x}" y="${y}" text-anchor="start" font-family="${FONT}" font-size="${fs}" font-weight="600" fill="${C_TEXT}">${tspans}</text>`;
     })
     .join("\n    ");
 }
@@ -202,21 +225,42 @@ function renderPanel(
   matches: TranslationHighlightMatch[],
   variant: "en" | "zh",
 ): string {
-  const fs = variant === "en" ? EN_FS : ZH_FS;
-  const lh = variant === "en" ? EN_LH : ZH_LH;
-  const padX = 22;
-  const padY = 18;
+  const padX = TEXT_PAD_X;
+  const padY = TEXT_PAD_Y;
   const innerW = PANEL_W - padX * 2;
+  const innerH = PANEL_H - padY * 2;
+  const minFs = variant === "en" ? EN_MIN_FS : ZH_MIN_FS;
+  const maxFs = variant === "en" ? EN_MAX_FS : ZH_MAX_FS;
 
-  const lines = buildLines(text, matches, innerW, fs, variant);
-  const totalTextH = lines.length * lh;
-  const startY = y + padY + (PANEL_H - padY * 2 - totalTextH) / 2 + fs;
-  const cx = x + PANEL_W / 2;
+  let bestFit = {
+    fs: minFs,
+    lh: Math.round(minFs * (variant === "en" ? 1.5 : 1.45) * 10) / 10,
+    lines: buildLines(text, matches, innerW, minFs, variant),
+  };
+
+  for (let candidate = maxFs; candidate >= minFs; candidate -= 1) {
+    const lh = Math.round(candidate * (variant === "en" ? 1.5 : 1.45) * 10) / 10;
+    const lines = buildLines(text, matches, innerW, candidate, variant);
+    const totalTextH = lines.length * lh;
+    const widestLine = lines.reduce(
+      (maxWidth, line) => Math.max(maxWidth, measureLineWidth(line, candidate, variant)),
+      0,
+    );
+
+    if (totalTextH <= innerH && widestLine <= innerW) {
+      bestFit = { fs: candidate, lh, lines };
+      break;
+    }
+  }
+
+  const totalTextH = bestFit.lines.length * bestFit.lh;
+  const startY = y + padY + (PANEL_H - padY * 2 - totalTextH) / 2 + bestFit.fs;
+  const startX = x + padX;
 
   return `
     <rect x="${x}" y="${y}" width="${PANEL_W}" height="${PANEL_H}" rx="12" fill="${C_PANEL}" stroke="${C_BORDER}" stroke-width="2.5"/>
     <rect x="${x + 8}" y="${y + 8}" width="${PANEL_W - 16}" height="${PANEL_H - 16}" rx="7" fill="none" stroke="${C_BORDER}" stroke-width="1" opacity="0.5"/>
-    ${renderLines(lines, cx, startY, lh, fs)}`;
+    ${renderLines(bestFit.lines, startX, startY, bestFit.lh, bestFit.fs)}`;
 }
 
 function renderScene(sceneImageDataUrl?: string): string {

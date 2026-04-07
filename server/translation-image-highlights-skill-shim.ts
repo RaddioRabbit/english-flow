@@ -87,7 +87,9 @@ function getFallbackSkillPrompt() {
 2. 顶层必须是 {"highlights":[...]}
 3. 每个 highlight 需要包含 word、english、chinese、color
 4. 中文优先选择当前句译里最小且准确的语义对应，不要求与 meaning 字面完全相同
-5. panel 只能是 prompt1/prompt2/prompt3/prompt4`;
+5. 不要按中英文语序机械配对；要根据当前句子的实际译法判断对应中文
+6. 如果英文词在对应英文 panel 里出现了，就必须返回 english 标注；若中文难以准确标注，可以省略 chinese，但不要丢掉 english
+7. panel 只能是 prompt1/prompt2/prompt3/prompt4`;
 }
 
 function resolveModel(env: TranslationHighlightsSkillEnv) {
@@ -134,6 +136,7 @@ function buildSimulatedClaudeCodeSystemPrompt(skillPrompt: string) {
 function buildUserPrompt(input: BuildTranslationHighlightsInput) {
   return [
     "请根据以下输入数据输出句译对照图的高亮对齐 JSON：",
+    "要求：优先按当前中文句译的实际表达做语义对齐，不要按词序硬对齐；英文只要在 panel 里出现就必须标出来。",
     "",
     JSON.stringify(
       {
@@ -372,11 +375,13 @@ function normalizeSkillHighlights(
     }
 
     const expectedChinesePanel = english.panel === "prompt1" ? "prompt2" : "prompt4";
-    const chinese = normalizeMatch(highlight.chinese, panelTexts, color, CHINESE_PANELS as Set<TranslationPanelId>);
-
-    if (chinese && (chinese.panel !== expectedChinesePanel || overlapsRange(occupied[chinese.panel], chinese))) {
-      continue;
-    }
+    const chineseMatch = normalizeMatch(highlight.chinese, panelTexts, color, CHINESE_PANELS as Set<TranslationPanelId>);
+    const chinese =
+      chineseMatch &&
+      chineseMatch.panel === expectedChinesePanel &&
+      !overlapsRange(occupied[chineseMatch.panel], chineseMatch)
+        ? chineseMatch
+        : null;
 
     occupied[english.panel].push({ start: english.start, end: english.end });
     if (chinese) {

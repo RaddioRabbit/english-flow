@@ -32,6 +32,15 @@ const HIGHLIGHT_COLORS = ["#2563eb", "#dc2626", "#059669", "#d97706", "#7c3aed",
 const SEMANTIC_CHINESE_ALIASES: Record<string, string[]> = {
   "便宜": ["廉价", "低价", "实惠"],
   "便宜货": ["廉价货", "廉价品"],
+  "多刺": ["带刺"],
+  "多刺的": ["带刺"],
+  "带刺的": ["带刺"],
+  "引诱": ["诱得", "被诱得", "引得"],
+  "诱惑": ["诱得", "被诱得", "引得"],
+  "使着迷": ["诱得", "被诱得", "迷住"],
+  "使陶醉": ["诱得", "被诱得"],
+  "闲逛": ["徘徊", "流连"],
+  "逗留": ["流连", "徘徊"],
 };
 
 function escapeRegExp(value: string) {
@@ -107,6 +116,11 @@ function expandSemanticMeaningVariants(candidate: string) {
   return variants.filter(Boolean);
 }
 
+interface MeaningCandidate {
+  text: string;
+  source: "direct" | "alias";
+}
+
 function extractMeaningCandidates(meaning: string) {
   // Step 1: Remove parenthetical content (English translations, notes)
   let cleaned = meaning
@@ -127,15 +141,22 @@ function extractMeaningCandidates(meaning: string) {
     .map((value) => stripPartOfSpeechPrefixes(value.trim()))
     .filter(Boolean);
 
-  const unique = Array.from(
+  const directCandidates = Array.from(
+    new Set([cleaned, ...rawCandidates].flatMap((candidate) => extractWrappedMeaningVariants(candidate))),
+  );
+  const directCandidateSet = new Set(directCandidates);
+  const aliasCandidates = Array.from(
     new Set(
-      [cleaned, ...rawCandidates].flatMap((candidate) => {
-        const wrappedVariants = extractWrappedMeaningVariants(candidate);
-        return wrappedVariants.flatMap((variant) => [variant, ...expandSemanticMeaningVariants(variant)]);
-      }),
+      directCandidates.flatMap((candidate) =>
+        expandSemanticMeaningVariants(candidate).filter((variant) => !directCandidateSet.has(variant)),
+      ),
     ),
   );
-  return unique.sort((left, right) => right.length - left.length);
+
+  return [
+    ...directCandidates.map((text) => ({ text, source: "direct" as const })),
+    ...aliasCandidates.map((text) => ({ text, source: "alias" as const })),
+  ];
 }
 
 function extractWrappedMeaningVariants(candidate: string) {
@@ -263,6 +284,12 @@ function findApproximateChineseMatch(text: string, target: string) {
   return bestMatch;
 }
 
+function getContextWrapperDepth(candidate: string, candidates: string[]) {
+  return candidates.filter(
+    (other) => other.length > candidate.length && other.includes(candidate) && isContextWrapper(candidate, other),
+  ).length;
+}
+
 /**
  * Check if a word appears to be a "context wrapper" rather than a modifier.
  * Context wrappers add surrounding context (e.g., "受不住" + "诱惑").
@@ -280,6 +307,7 @@ function isContextWrapper(shorter: string, longer: string): boolean {
     /被/, /受/, /遭到/, /遭受/, /感到/, /觉得/, /认为/, /令人/, /让人/, /使人/, // passive/perception markers
     /很/, /非常/, /特别/, /十分/, /极其/, /太/, /更/, /最/, // intensity adverbs
     /的/, /地/, /得/, // structural particles
+    /不去/, // aspect/directional tail, e.g. "徘徊不去"
   ];
 
   // If the extra part contains context patterns, it's likely a context wrapper
@@ -295,73 +323,100 @@ function findChineseMatch(
   text: string,
   meaning: string,
   color: string,
-): TranslationHighlightSpan["chinese"] | null {
+): TranslationHighlightSpan["chinese"] | undefined {
   if (!text || !meaning.trim()) {
-    return null;
+    return undefined;
   }
 
   const candidates = extractMeaningCandidates(meaning);
 
-  // Phase 1: Collect all exact matches
-  const exactMatches: Array<{ candidate: string; index: number }> = [];
-  for (const candidate of candidates) {
-    let index = text.indexOf(candidate);
-    while (index >= 0) {
-      exactMatches.push({ candidate, index });
-      index = text.indexOf(candidate, index + 1);
+  const findBestExactMatch = (candidatePool: MeaningCandidate[]) => {
+    const exactMatches: Array<{ candidate: string; index: number; priority: number }> = [];
+    for (const [priority, { text: candidate }] of candidatePool.entries()) {
+      let index = text.indexOf(candidate);
+      while (index >= 0) {
+        exactMatches.push({ candidate, index, priority });
+        index = text.indexOf(candidate, index + 1);
+      }
     }
-  }
 
-  if (exactMatches.length > 0) {
-    // Sort by: 1) prefer core terms over context-wrapped terms, 2) longer length
+    if (!exactMatches.length) {
+      return null;
+    }
+
+    const candidateTexts = candidatePool.map((candidate) => candidate.text);
     exactMatches.sort((a, b) => {
-      // Check if this match is a core term that gets wrapped by context in other candidates
-      const aHasContextWrapper = candidates.some(
-        c => c.includes(a.candidate) && c.length > a.candidate.length && isContextWrapper(a.candidate, c)
-      );
-      const bHasContextWrapper = candidates.some(
-        c => c.includes(b.candidate) && c.length > b.candidate.length && isContextWrapper(b.candidate, c)
-      );
+      const depthDiff = getContextWrapperDepth(b.candidate, candidateTexts) - getContextWrapperDepth(a.candidate, candidateTexts);
+      if (depthDiff !== 0) {
+        return depthDiff;
+      }
 
-      // If a is a core term that could be wrapped (e.g., "诱惑"), prefer it
-      // If b is a core term that could be wrapped, prefer it
-      if (aHasContextWrapper && !bHasContextWrapper) return -1;
-      if (!aHasContextWrapper && bHasContextWrapper) return 1;
+      const aWrapsB = a.candidate.includes(b.candidate) && isContextWrapper(b.candidate, a.candidate);
+      const bWrapsA = b.candidate.includes(a.candidate) && isContextWrapper(a.candidate, b.candidate);
+      if (aWrapsB !== bWrapsA) {
+        return aWrapsB ? 1 : -1;
+      }
 
-      // Otherwise, prefer longer matches (more specific, like "小锚" over "锚")
-      return b.candidate.length - a.candidate.length;
+      const lengthDiff = b.candidate.length - a.candidate.length;
+      if (lengthDiff !== 0) {
+        return lengthDiff;
+      }
+
+      const priorityDiff = a.priority - b.priority;
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      return a.index - b.index;
     });
 
-    const best = exactMatches[0];
+    return exactMatches[0];
+  };
+
+  const directCandidates = candidates.filter((candidate) => candidate.source === "direct");
+  const aliasCandidates = candidates.filter((candidate) => candidate.source === "alias");
+  const bestExactMatch = findBestExactMatch(directCandidates) ?? findBestExactMatch(aliasCandidates);
+
+  if (bestExactMatch) {
     return {
       panel,
-      text: best.candidate,
-      start: best.index,
-      end: best.index + best.candidate.length,
+      text: bestExactMatch.candidate,
+      start: bestExactMatch.index,
+      end: bestExactMatch.index + bestExactMatch.candidate.length,
       color,
     };
   }
 
-  // Phase 2: Approximate matching - only for short candidates (≤10 chars)
-  // Sort shorter candidates first to prefer core words
-  const shortCandidates = candidates
-    .filter(c => c.length <= 10)
-    .sort((a, b) => a.length - b.length);
+  const findApproximateMatch = (candidatePool: MeaningCandidate[]) => {
+    const shortCandidates = candidatePool
+      .map((candidate) => candidate.text)
+      .filter((candidate) => candidate.length <= 10)
+      .sort((a, b) => a.length - b.length);
 
-  for (const candidate of shortCandidates) {
-    const approximate = findApproximateChineseMatch(text, candidate);
-    if (approximate) {
-      return {
-        panel,
-        text: approximate.text,
-        start: approximate.start,
-        end: approximate.end,
-        color,
-      };
+    for (const candidate of shortCandidates) {
+      const approximate = findApproximateChineseMatch(text, candidate);
+      if (approximate) {
+        return approximate;
+      }
     }
+
+    return null;
+  };
+
+  const approximateMatch =
+    findApproximateMatch(directCandidates) ?? findApproximateMatch(aliasCandidates);
+
+  if (approximateMatch) {
+    return {
+      panel,
+      text: approximateMatch.text,
+      start: approximateMatch.start,
+      end: approximateMatch.end,
+      color,
+    };
   }
 
-  return null;
+  return undefined;
 }
 
 function overlapsRange(
@@ -395,10 +450,10 @@ export function buildTranslationHighlights(input: BuildTranslationHighlightsInpu
     const chineseText = chinesePanel === "prompt2" ? input.prompt2 : input.prompt4;
     // Only use item.meaning (concise Chinese word definition).
     // item.translation is the Chinese translation of the example sentence — not panel content.
-    const chinese = item.meaning ? findChineseMatch(chinesePanel, chineseText, item.meaning, color) : null;
-
+    const chineseMatch = item.meaning ? findChineseMatch(chinesePanel, chineseText, item.meaning, color) : undefined;
+    let chinese = chineseMatch ?? undefined;
     if (chinese && overlapsRange(occupied[chinese.panel], chinese)) {
-      continue;
+      chinese = undefined;
     }
 
     occupied[english.panel].push({ start: english.start, end: english.end });

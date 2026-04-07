@@ -3,22 +3,64 @@ import { describe, expect, it } from "vitest";
 import { buildTranslationImageSvgDataUrl } from "@/lib/translation-image-svg";
 
 describe("buildTranslationImageSvgDataUrl", () => {
-  it("uses the updated parchment background color for the full image", () => {
-    const dataUrl = buildTranslationImageSvgDataUrl({
-      bookName: "Robinson Crusoe",
-      author: "Daniel Defoe",
-      originSentence: "After all, Xury's advice was good, and we dropped our little anchor.",
-      prompt1: "After all, Xury's advice was good,",
-      prompt2: "毕竟，休里的建议很好，",
-      prompt3: "and we dropped our little anchor.",
-      prompt4: "我们抛下了小锚。",
-      vocabulary: [],
-      sceneImageDataUrl: undefined,
-    });
+  it("left-aligns panel text, uses 10% inner padding, and shrinks the font for longer paragraphs", () => {
+    const shortTextSvg = decodeURIComponent(
+      buildTranslationImageSvgDataUrl({
+        bookName: "Robinson Crusoe",
+        author: "Daniel Defoe",
+        originSentence: "After all, Xury's advice was good, and we dropped our little anchor.",
+        prompt1: "Advice was good.",
+        prompt2: "建议很好。",
+        prompt3: "We dropped anchor.",
+        prompt4: "我们抛锚了。",
+        vocabulary: [
+          {
+            id: "vocab-advice",
+            word: "advice",
+            phonetic: "",
+            partOfSpeech: "n.",
+            meaning: "建议",
+            example: "",
+            translation: "",
+          },
+        ],
+        sceneImageDataUrl: undefined,
+      }).replace("data:image/svg+xml;charset=utf-8,", ""),
+    );
 
-    const svg = decodeURIComponent(dataUrl.replace("data:image/svg+xml;charset=utf-8,", ""));
+    const longTextSvg = decodeURIComponent(
+      buildTranslationImageSvgDataUrl({
+        bookName: "Robinson Crusoe",
+        author: "Daniel Defoe",
+        originSentence: "After all, Xury's advice was good, and we dropped our little anchor.",
+        prompt1: "After all, Xury's advice was good, and we dropped our little anchor beside the weathered rocks before dawn arrived.",
+        prompt2: "毕竟，休里的建议很好，我们在黎明到来之前把小锚抛在风化岩石旁边。",
+        prompt3: "The sea settled slowly while the boat stayed close to shore through the night.",
+        prompt4: "海面慢慢平静下来，小船整夜都贴着岸边停着。",
+        vocabulary: [
+          {
+            id: "vocab-advice",
+            word: "advice",
+            phonetic: "",
+            partOfSpeech: "n.",
+            meaning: "建议",
+            example: "",
+            translation: "",
+          },
+        ],
+        sceneImageDataUrl: undefined,
+      }).replace("data:image/svg+xml;charset=utf-8,", ""),
+    );
 
-    expect(svg).toContain('fill="#fbf2d5"');
+    const shortFontSize = Number(shortTextSvg.match(/font-size="([0-9.]+)"/)?.[1]);
+    const longFontSize = Number(longTextSvg.match(/font-size="([0-9.]+)"/)?.[1]);
+
+    expect(shortTextSvg).toContain('text-anchor="start"');
+    expect(shortTextSvg).not.toContain('text-anchor="middle"');
+    expect(shortTextSvg).toContain('x="62"');
+    expect(shortTextSvg).toContain('x="532"');
+    expect(shortFontSize).toBeGreaterThan(longFontSize);
+    expect(longFontSize).toBeGreaterThan(0);
   });
 
   it("renders highlighted english and chinese text and embeds the scene image", () => {
@@ -44,13 +86,29 @@ describe("buildTranslationImageSvgDataUrl", () => {
       sceneImageDataUrl: "data:image/png;base64,scene",
     });
 
-    expect(dataUrl.startsWith("data:image/svg+xml;charset=utf-8,")).toBe(true);
-
     const svg = decodeURIComponent(dataUrl.replace("data:image/svg+xml;charset=utf-8,", ""));
 
     expect(svg).toContain("advice");
     expect(svg).toContain("建议");
     expect(svg).toContain("data:image/png;base64,scene");
+  });
+
+  it("uses the updated parchment background color for the full image", () => {
+    const dataUrl = buildTranslationImageSvgDataUrl({
+      bookName: "Robinson Crusoe",
+      author: "Daniel Defoe",
+      originSentence: "After all, Xury's advice was good, and we dropped our little anchor.",
+      prompt1: "After all, Xury's advice was good,",
+      prompt2: "毕竟，休里的建议很好，",
+      prompt3: "and we dropped our little anchor.",
+      prompt4: "我们抛下了小锚。",
+      vocabulary: [],
+      sceneImageDataUrl: undefined,
+    });
+
+    const svg = decodeURIComponent(dataUrl.replace("data:image/svg+xml;charset=utf-8,", ""));
+
+    expect(svg).toContain('fill="#fbf2d5"');
   });
 
   it("uses SVG native text-decoration attribute (not CSS) for vocabulary underlines", () => {

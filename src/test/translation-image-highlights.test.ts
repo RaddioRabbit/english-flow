@@ -282,4 +282,114 @@ describe("buildTranslationHighlights", () => {
     expect(highlights[0].chinese?.text).toBe("廉价");
     expect(highlights[0].chinese?.text).not.toBe("廉价柜台");
   });
+
+  it("keeps the english underline even when the chinese match overlaps another highlight", () => {
+    const highlights = buildTranslationHighlights({
+      prompt1: "fragrant narcissi and thorny Scotch roses",
+      prompt2: "这里有芬芳的花和带刺的玫瑰",
+      prompt3: "",
+      prompt4: "",
+      vocabulary: [
+        {
+          id: "vocab-fragrant",
+          word: "fragrant",
+          phonetic: "",
+          partOfSpeech: "adj.",
+          meaning: "芬芳",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-thorny",
+          word: "thorny",
+          phonetic: "",
+          partOfSpeech: "adj.",
+          meaning: "芬芳",
+          example: "",
+          translation: "",
+        },
+      ],
+    });
+
+    expect(highlights).toHaveLength(2);
+    expect(highlights[0].english.text.toLowerCase()).toBe("fragrant");
+    expect(highlights[0].chinese?.text).toBe("芬芳");
+    expect(highlights[1].english.text.toLowerCase()).toBe("thorny");
+    expect(highlights[1].chinese).toBeUndefined();
+  });
+
+  it("can align beguiled and loitering to the actual chinese translation instead of word order", () => {
+    const highlights = buildTranslationHighlights({
+      prompt1: "",
+      prompt2: "",
+      prompt3: "it was where sunshine lingered and bees hummed, and winds, beguiled into loitering, purred and rustled.",
+      prompt4: "这是一个阳光流连、蜜蜂嗡嗡、风儿被诱得徘徊不去、发出轻柔沙沙声的花园。",
+      vocabulary: [
+        {
+          id: "vocab-linger",
+          word: "lingered",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "流连；逗留",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-beguile",
+          word: "beguiled",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "诱惑；使着迷",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-loiter",
+          word: "loitering",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "闲逛",
+          example: "",
+          translation: "",
+        },
+      ],
+    });
+
+    expect(highlights).toHaveLength(3);
+    const lingered = highlights.find((highlight) => highlight.word === "lingered");
+    const beguiled = highlights.find((highlight) => highlight.word === "beguiled");
+    const loitering = highlights.find((highlight) => highlight.word === "loitering");
+
+    expect(lingered?.chinese?.text).toBe("流连");
+    expect(beguiled?.english.text.toLowerCase()).toBe("beguiled");
+    expect(beguiled?.chinese?.text).toBe("诱得");
+    expect(loitering?.english.text.toLowerCase()).toBe("loitering");
+    expect(loitering?.chinese?.text).toBe("徘徊");
+  });
+
+  it("can align thorny to the actual chinese translation used in the panel", () => {
+    const highlights = buildTranslationHighlights({
+      prompt1:
+        "There were rosy bleeding-hearts and great splendid crimson peonies white, fragrant narcissi and thorny, sweet Scotch roses;",
+      prompt2:
+        "这里有娇艳欲滴的荷包牡丹和硕大艳丽的深红色牡丹；洁白芬芳的水仙花和带刺却芬香的粉色兰玫瑰；",
+      prompt3: "",
+      prompt4: "",
+      vocabulary: [
+        {
+          id: "vocab-thorny",
+          word: "thorny",
+          phonetic: "",
+          partOfSpeech: "adj.",
+          meaning: "多刺的",
+          example: "",
+          translation: "",
+        },
+      ],
+    });
+
+    expect(highlights).toHaveLength(1);
+    expect(highlights[0].english.text.toLowerCase()).toBe("thorny");
+    expect(highlights[0].chinese?.text).toBe("带刺");
+  });
 });

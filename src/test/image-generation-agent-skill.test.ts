@@ -244,6 +244,114 @@ describe("image generation agents runtime skill integration", () => {
     expect(underlinedTexts).not.toContain("受不住诱惑");
   });
 
+  it("keeps all six selected vocabulary highlights visible in the translation SVG even when chinese phrasing is contextual", async () => {
+    const skill = vi.fn().mockImplementation(async (name: string) => {
+      if (name === IMAGE_GENERATION_SKILL_NAME) {
+        return { image_data_url: "data:image/png;base64,translation-image" };
+      }
+
+      if (name === "translation-image-highlights") {
+        throw new Error("Unsupported runtime skill: translation-image-highlights");
+      }
+
+      throw new Error(`Unexpected skill: ${name}`);
+    });
+    runtime.skill = skill;
+
+    const result = await generatePage11Image({
+      bookName: "Anne of Green Gables",
+      originSentence:
+        "There were rosy bleeding-hearts and great splendid crimson peonies white, fragrant narcissi and thorny, sweet Scotch roses; a garden it was where sunshine lingered and bees hummed, and winds, beguiled into loitering, purred and rustled.",
+      prompt1:
+        "There were rosy bleeding-hearts and great splendid crimson peonies white, fragrant narcissi and thorny, sweet Scotch roses;",
+      prompt2:
+        "这里有娇艳欲滴的荷包牡丹和硕大艳丽的深红色牡丹；洁白芬芳的水仙花和带刺却芬香的粉色兰玫瑰；",
+      prompt3:
+        "a garden it was where sunshine lingered and bees hummed, and winds, beguiled into loitering, purred and rustled.",
+      prompt4:
+        "这是一个阳光流连、蜜蜂嗡嗡、风儿被诱得徘徊不去、发出轻柔沙沙声的花园。",
+      vocabulary: [
+        {
+          id: "vocab-crimson",
+          word: "crimson",
+          phonetic: "",
+          partOfSpeech: "adj.",
+          meaning: "深红色",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-fragrant",
+          word: "fragrant",
+          phonetic: "",
+          partOfSpeech: "adj.",
+          meaning: "芬芳",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-thorny",
+          word: "thorny",
+          phonetic: "",
+          partOfSpeech: "adj.",
+          meaning: "多刺的",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-lingered",
+          word: "lingered",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "流连",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-beguiled",
+          word: "beguiled",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "使着迷",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-loitering",
+          word: "loitering",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "闲逛",
+          example: "",
+          translation: "",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.imageDataUrl).toMatch(/^data:image\/svg\+xml/);
+
+    const svg = decodeURIComponent(result.imageDataUrl!.replace("data:image/svg+xml;charset=utf-8,", ""));
+    const underlinedTexts = Array.from(
+      svg.matchAll(/<tspan fill="([^"]+)" text-decoration="underline">([^<]+)<\/tspan>/g),
+      (match) => match[2],
+    );
+    const highlightedText = underlinedTexts.join("");
+
+    expect(highlightedText).toContain("crimson");
+    expect(highlightedText).toContain("fragrant");
+    expect(highlightedText).toContain("thorny");
+    expect(highlightedText).toContain("lingered");
+    expect(highlightedText).toContain("beguiled");
+    expect(highlightedText).toContain("loitering");
+    expect(highlightedText).toContain("深红色");
+    expect(highlightedText).toContain("芬芳");
+    expect(highlightedText).toContain("带刺");
+    expect(highlightedText).toContain("流连");
+    expect(highlightedText).toContain("诱得");
+    expect(highlightedText).toContain("徘徊");
+  });
+
   it("deduplicates overlapping tempt and tempted highlights from local fallback and runtime skill", async () => {
     const skill = vi.fn().mockImplementation(async (name: string) => {
       if (name === IMAGE_GENERATION_SKILL_NAME) {
