@@ -244,6 +244,76 @@ describe("image generation agents runtime skill integration", () => {
     expect(underlinedTexts).not.toContain("受不住诱惑");
   });
 
+  it("deduplicates overlapping tempt and tempted highlights from local fallback and runtime skill", async () => {
+    const skill = vi.fn().mockImplementation(async (name: string) => {
+      if (name === IMAGE_GENERATION_SKILL_NAME) {
+        return { image_data_url: "data:image/png;base64,translation-image" };
+      }
+
+      if (name === "translation-image-highlights") {
+        return {
+          highlights: [
+            {
+              id: "vocab-tempt",
+              word: "tempted",
+              color: "#2563eb",
+              english: {
+                panel: "prompt1",
+                text: "tempted",
+                start: 17,
+                end: 24,
+                color: "#2563eb",
+              },
+              chinese: {
+                panel: "prompt2",
+                text: "诱惑",
+                start: 13,
+                end: 15,
+                color: "#2563eb",
+              },
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Unexpected skill: ${name}`);
+    });
+    runtime.skill = skill;
+
+    const result = await generatePage11Image({
+      bookName: "Anne of Green Gables",
+      originSentence: "Marilla had been tempted to buy from a peddler.",
+      prompt1: "Marilla had been tempted to buy from a peddler",
+      prompt2: "玛丽拉去年夏天曾受不住诱惑从一个货郎那儿买来",
+      prompt3: "",
+      prompt4: "",
+      vocabulary: [
+        {
+          id: "vocab-tempt",
+          word: "tempt",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "诱惑",
+          example: "",
+          translation: "",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.imageDataUrl).toMatch(/^data:image\/svg\+xml/);
+
+    const svg = decodeURIComponent(result.imageDataUrl!.replace("data:image/svg+xml;charset=utf-8,", ""));
+    const underlinedTexts = Array.from(
+      svg.matchAll(/<tspan fill="([^"]+)" text-decoration="underline">([^<]+)<\/tspan>/g),
+      (match) => match[2],
+    );
+
+    expect(underlinedTexts.filter((text) => text === "tempted")).toHaveLength(1);
+    expect(underlinedTexts).not.toContain("tempt");
+    expect(underlinedTexts.filter((text) => text === "诱惑")).toHaveLength(1);
+  });
+
   it("surfaces runtime skill failures from grammar image generation", async () => {
     const skill = vi.fn().mockRejectedValue(new Error("AIFAST unavailable"));
     runtime.skill = skill;

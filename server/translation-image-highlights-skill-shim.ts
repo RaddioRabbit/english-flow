@@ -399,6 +399,25 @@ function buildHighlightKey(highlight: TranslationHighlightSpan) {
   return `${highlight.word.toLowerCase()}::${highlight.english.panel}::${highlight.english.start}:${highlight.english.end}`;
 }
 
+function rangesOverlap(
+  left: { panel: TranslationPanelId; start: number; end: number },
+  right: { panel: TranslationPanelId; start: number; end: number },
+) {
+  return left.panel === right.panel && left.start < right.end && left.end > right.start;
+}
+
+function highlightsOverlap(left: TranslationHighlightSpan, right: TranslationHighlightSpan) {
+  if (rangesOverlap(left.english, right.english)) {
+    return true;
+  }
+
+  if (left.chinese && right.chinese && rangesOverlap(left.chinese, right.chinese)) {
+    return true;
+  }
+
+  return false;
+}
+
 function mergeSkillHighlights(
   skillHighlights: TranslationHighlightSpan[],
   localHighlights: TranslationHighlightSpan[],
@@ -408,28 +427,40 @@ function mergeSkillHighlights(
   }
 
   const skillByKey = new Map(skillHighlights.map((highlight) => [buildHighlightKey(highlight), highlight]));
-  const merged = localHighlights.map((highlight) => {
-    const skillHighlight = skillByKey.get(buildHighlightKey(highlight));
-    if (!skillHighlight) {
+  const localByKey = new Map(localHighlights.map((highlight) => [buildHighlightKey(highlight), highlight]));
+  const merged = skillHighlights.map((highlight) => {
+    const localHighlight = localByKey.get(buildHighlightKey(highlight));
+    if (!localHighlight) {
       return highlight;
     }
 
     return {
+      ...localHighlight,
       ...highlight,
-      ...skillHighlight,
-      english: skillHighlight.english,
+      english: highlight.english,
       // Keep the local Chinese match when the skill did not return a valid one.
-      chinese: skillHighlight.chinese ?? highlight.chinese,
+      chinese: highlight.chinese ?? localHighlight.chinese,
     };
   });
-  const seen = new Set(merged.map((highlight) => buildHighlightKey(highlight)));
 
-  for (const highlight of skillHighlights) {
-    const key = buildHighlightKey(highlight);
-    if (!seen.has(key)) {
-      merged.push(highlight);
-      seen.add(key);
+  for (const localHighlight of localHighlights) {
+    if (skillByKey.has(buildHighlightKey(localHighlight))) {
+      continue;
     }
+
+    const overlapIndex = merged.findIndex((highlight) => highlightsOverlap(highlight, localHighlight));
+    if (overlapIndex >= 0) {
+      const overlappingHighlight = merged[overlapIndex];
+      if (!overlappingHighlight.chinese && localHighlight.chinese) {
+        merged[overlapIndex] = {
+          ...overlappingHighlight,
+          chinese: localHighlight.chinese,
+        };
+      }
+      continue;
+    }
+
+    merged.push(localHighlight);
   }
 
   return merged;
