@@ -1,6 +1,7 @@
 import type { Task } from "@/lib/task-store";
 import type {
   SentenceExplanationTtsLanguage,
+  SentenceExplanationTtsModel,
   SentenceExplanationTtsPreviewRequest,
   SentenceExplanationTtsPreviewResponse,
   SentenceExplanationTtsVoice,
@@ -18,6 +19,7 @@ export async function generateSentenceExplanationTts(
     language?: SentenceExplanationTtsLanguage;
     voice?: SentenceExplanationTtsVoice;
     speed?: number;
+    model?: SentenceExplanationTtsModel;
   } = {},
 ): Promise<SentenceExplanationTtsResponse> {
   const requestBody: SentenceExplanationTtsRequest = {
@@ -26,6 +28,7 @@ export async function generateSentenceExplanationTts(
     language: options.language,
     voice: options.voice,
     speed: options.speed,
+    model: options.model,
   };
 
   const controller = new AbortController();

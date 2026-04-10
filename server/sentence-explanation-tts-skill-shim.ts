@@ -3,6 +3,7 @@ import type {
   SentenceExplanationTtsLanguage,
   SentenceExplanationTtsLineAudio,
   SentenceExplanationTtsMetadata,
+  SentenceExplanationTtsModel,
   SentenceExplanationTtsPreviewRequest,
   SentenceExplanationTtsPreviewResponse,
   SentenceExplanationTtsRequest,
@@ -11,9 +12,11 @@ import type {
   SentenceExplanationTtsVoice,
 } from "../src/lib/sentence-explanation-tts-contract";
 import {
+  DEFAULT_TTS_MODEL,
   getSentenceExplanationTtsLanguageBoost,
   getSentenceExplanationTtsLanguageOption,
   resolveSentenceExplanationTtsVoice,
+  sentenceExplanationTtsModelOptions,
 } from "../src/lib/sentence-explanation-tts-options";
 import {
   joinSentenceExplanationLines,
@@ -26,6 +29,7 @@ import { registerRuntimeSkill } from "./runtime-skill-registry";
 interface SentenceExplanationTtsEnv {
   MINIMAX_API_KEY?: string;
   MINIMAX_BASE_URL?: string;
+  DEFAULT_TTS_MODEL?: string;
   SENTENCE_EXPLANATION_TTS_TIMEOUT_MS?: string;
   SENTENCE_EXPLANATION_TTS_MAX_RETRIES?: string;
   SENTENCE_EXPLANATION_TTS_SEGMENT_RETRY_PASSES?: string;
@@ -75,7 +79,6 @@ const MAX_TIMEOUT_MS = 180_000;
 const MAX_CONCURRENCY = 12;
 const MIN_RATE_LIMIT_COOLDOWN_MS = 1_000;
 const MAX_RATE_LIMIT_COOLDOWN_MS = 300_000;
-const DEFAULT_TTS_MODEL = "speech-2.8-hd";
 const DEFAULT_TTS_VOICE = getSentenceExplanationTtsLanguageOption("zh").defaultVoice;
 const DEFAULT_TTS_SPEED = 1;
 const DEFAULT_TTS_ENDPOINTS = [
@@ -127,6 +130,14 @@ function resolveVoice(
   raw: SentenceExplanationTtsRequest["voice"] | SentenceExplanationTtsPreviewRequest["voice"],
 ) {
   return resolveSentenceExplanationTtsVoice(language, raw) || DEFAULT_TTS_VOICE;
+}
+
+function resolveModel(raw: SentenceExplanationTtsRequest["model"] | SentenceExplanationTtsPreviewRequest["model"]) {
+  const validModels: SentenceExplanationTtsModel[] = sentenceExplanationTtsModelOptions.map((option) => option.value);
+  if (raw && validModels.includes(raw)) {
+    return raw;
+  }
+  return DEFAULT_TTS_MODEL;
 }
 
 function ensureAudioConfig(env: SentenceExplanationTtsEnv) {
@@ -381,6 +392,7 @@ async function requestSpeech(
   language: SentenceExplanationTtsLanguage,
   voice: SentenceExplanationTtsVoice,
   speed: number,
+  model: SentenceExplanationTtsModel,
   env: SentenceExplanationTtsEnv,
   config: ResolvedTtsRuntimeConfig,
   rateLimitState: TtsRateLimitState,
@@ -405,7 +417,7 @@ async function requestSpeech(
             authorization: `Bearer ${env.MINIMAX_API_KEY!.trim()}`,
           },
           body: JSON.stringify({
-            model: DEFAULT_TTS_MODEL,
+            model,
             text: trimTtsText(text),
             stream: false,
             language_boost: getSentenceExplanationTtsLanguageBoost(language),
@@ -450,7 +462,7 @@ async function requestSpeech(
         const audioBuffer = Buffer.from(hexAudio, "hex");
         return {
           audioDataUrl: `data:audio/mpeg;base64,${audioBuffer.toString("base64")}`,
-          model: DEFAULT_TTS_MODEL,
+          model,
         };
       } catch (error) {
         lastError = getErrorMessage(error, "Sentence explanation TTS request timed out.");
@@ -562,6 +574,7 @@ async function synthesizeSegments(
   language: SentenceExplanationTtsLanguage,
   voice: SentenceExplanationTtsVoice,
   speed: number,
+  model: SentenceExplanationTtsModel,
   env: SentenceExplanationTtsEnv,
   config: ResolvedTtsRuntimeConfig,
 ) {
@@ -577,7 +590,7 @@ async function synthesizeSegments(
 
     await processWithConcurrency(pendingSegments, config.concurrency, async (segment) => {
       try {
-        const result = await requestSpeech(segment.text, language, voice, speed, env, config, rateLimitState);
+        const result = await requestSpeech(segment.text, language, voice, speed, model, env, config, rateLimitState);
         audioBySegment.set(segment.key, result.audioDataUrl);
         segmentErrors.delete(segment.key);
       } catch (error) {
@@ -611,6 +624,7 @@ export async function runSentenceExplanationTtsSkill(
   const language = resolveLanguage(input.language);
   const voice = resolveVoice(language, input.voice);
   const speed = resolveSpeed(input.speed);
+  const model = resolveModel(input.model);
   const segments = buildSegments(input);
   const effectiveConfig = {
     ...config,
@@ -621,6 +635,7 @@ export async function runSentenceExplanationTtsSkill(
     language,
     voice,
     speed,
+    model,
     env,
     effectiveConfig,
   );
@@ -655,6 +670,7 @@ export async function runSentenceExplanationTtsSkill(
     language,
     voice,
     speed,
+    model,
     generatedAt: new Date().toISOString(),
     totalSegments: segments.length,
     successfulSegments,
@@ -668,7 +684,7 @@ export async function runSentenceExplanationTtsSkill(
     conclusion,
     metadata,
     source: "minimax-api",
-    model: DEFAULT_TTS_MODEL,
+    model,
   };
 }
 
@@ -682,8 +698,9 @@ async function runSentenceExplanationTtsPreviewSkill(
   const language = resolveLanguage(input.language);
   const voice = resolveVoice(language, input.voice);
   const speed = resolveSpeed(input.speed);
+  const model = resolveModel(input.model);
   const previewText = getSentenceExplanationTtsLanguageOption(language).previewText;
-  const result = await requestSpeech(previewText, language, voice, speed, env, config, {
+  const result = await requestSpeech(previewText, language, voice, speed, model, env, config, {
     cooldownUntil: 0,
   });
 

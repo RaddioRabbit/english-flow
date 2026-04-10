@@ -9,6 +9,7 @@ import type {
   SentenceExplanationTtsVoice,
 } from "../src/lib/sentence-explanation-tts-contract";
 import {
+  DEFAULT_TTS_MODEL,
   getSentenceExplanationTtsLanguageOption,
   resolveSentenceExplanationTtsVoice,
 } from "../src/lib/sentence-explanation-tts-options";
@@ -137,6 +138,7 @@ function normalizeResponse(
       : typeof input.speed === "number"
         ? input.speed
         : 1;
+  const model = safeResult.metadata?.model || safeResult.model || input.model || DEFAULT_TTS_MODEL;
   const introductionLines = normalizeSentenceExplanationLines(article.introductionLines, article.introduction);
   const conclusionLines = normalizeSentenceExplanationLines(article.conclusionLines, article.conclusion);
   const introduction = normalizeAudioContent(
@@ -171,12 +173,13 @@ function normalizeResponse(
       language,
       voice,
       speed,
+      model,
       generatedAt: safeResult.metadata?.generatedAt || new Date().toISOString(),
       totalSegments,
       successfulSegments,
     },
     source: safeResult.source || "minimax-api",
-    model: safeResult.model || "speech-2.8-hd",
+    model,
   };
 }
 
@@ -217,16 +220,17 @@ function normalizePreviewResponse(
   const voice = safeResult.voice || resolveVoice(language, input.voice);
   const speed =
     typeof safeResult.speed === "number" ? safeResult.speed : typeof input.speed === "number" ? input.speed : 1;
+  const model = safeResult.model || input.model || DEFAULT_TTS_MODEL;
 
   return {
     language,
     voice,
     speed,
+    model,
     generatedAt: safeResult.generatedAt || new Date().toISOString(),
     text: safeResult.text || getSentenceExplanationTtsLanguageOption(language).previewText,
     audioDataUrl: safeResult.audioDataUrl ?? null,
     source: safeResult.source || "minimax-api",
-    model: safeResult.model || "speech-2.8-hd",
   };
 }
 

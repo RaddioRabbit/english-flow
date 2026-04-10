@@ -76,18 +76,30 @@ export type SentenceExplanationTtsLanguage =
   | "ar"
   | "hi";
 
+export type SentenceExplanationTtsModel =
+  | "speech-2.8-hd"
+  | "speech-2.8-turbo"
+  | "speech-2.6-hd"
+  | "speech-2.6-turbo"
+  | "speech-02-hd"
+  | "speech-02-turbo"
+  | "speech-01-hd"
+  | "speech-01-turbo";
+
 export interface SentenceExplanationTtsRequest {
   taskId: string;
   article: SentenceExplanationArticle;
   language?: SentenceExplanationTtsLanguage;
   voice?: SentenceExplanationTtsVoice;
   speed?: number;
+  model?: SentenceExplanationTtsModel;
 }
 
 export interface SentenceExplanationTtsPreviewRequest {
   language: SentenceExplanationTtsLanguage;
   voice?: SentenceExplanationTtsVoice;
   speed?: number;
+  model?: SentenceExplanationTtsModel;
 }
 
 export interface SentenceExplanationTtsAudioContent {
@@ -123,6 +135,7 @@ export interface SentenceExplanationTtsMetadata {
   language: SentenceExplanationTtsLanguage;
   voice: SentenceExplanationTtsVoice;
   speed: number;
+  model: SentenceExplanationTtsModel;
   generatedAt: string;
   totalSegments: number;
   successfulSegments: number;

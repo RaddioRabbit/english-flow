@@ -1,5 +1,6 @@
 import type {
   SentenceExplanationTtsLanguage,
+  SentenceExplanationTtsModel,
   SentenceExplanationTtsVoice,
 } from "./sentence-explanation-tts-contract";
 
@@ -60,7 +61,14 @@ export interface SentenceExplanationTtsResolvedSelection {
   voiceOption: SentenceExplanationTtsVoiceOption;
 }
 
+export interface SentenceExplanationTtsModelOption {
+  value: SentenceExplanationTtsModel;
+  label: string;
+  description: string;
+}
+
 const DEFAULT_TTS_LANGUAGE: SentenceExplanationTtsLanguage = "zh";
+export const DEFAULT_TTS_MODEL: SentenceExplanationTtsModel = "speech-2.8-hd";
 
 const GENDER_ORDER: SentenceExplanationTtsVoiceGender[] = ["female", "male"];
 
@@ -708,6 +716,21 @@ const sentenceExplanationTtsLanguageOptionMap = Object.fromEntries(
 const sentenceExplanationTtsVoiceOptionMap = Object.fromEntries(
   sentenceExplanationTtsVoiceCatalog.map((voice) => [voice.value, voice]),
 ) as Record<SentenceExplanationTtsVoice, SentenceExplanationTtsVoiceOption>;
+
+export const sentenceExplanationTtsModelOptions: SentenceExplanationTtsModelOption[] = [
+  { value: "speech-2.8-hd", label: "speech-2.8-hd", description: "精准还原真实语气细节，全面提升音色相似度" },
+  { value: "speech-2.8-turbo", label: "speech-2.8-turbo", description: "精准还原真实语气细节，更快更优惠" },
+  { value: "speech-2.6-hd", label: "speech-2.6-hd", description: "超低延时，归一化升级，更高自然度" },
+  { value: "speech-2.6-turbo", label: "speech-2.6-turbo", description: "极速版，更快更优惠，更适用于语音聊天和数字人场景" },
+  { value: "speech-02-hd", label: "speech-02-hd", description: "拥有出色的韵律、稳定性和复刻相似度，音质表现突出" },
+  { value: "speech-02-turbo", label: "speech-02-turbo", description: "拥有出色的韵律和稳定性，小语种能力加强，性能表现出色" },
+  { value: "speech-01-hd", label: "speech-01-hd", description: "经典高清版，音质稳定" },
+  { value: "speech-01-turbo", label: "speech-01-turbo", description: "经典极速版，响应更快" },
+];
+
+export const sentenceExplanationTtsModelLabels = Object.fromEntries(
+  sentenceExplanationTtsModelOptions.map((model) => [model.value, model.label]),
+) as Record<SentenceExplanationTtsModel, string>;
 
 export const sentenceExplanationTtsVoices = sentenceExplanationTtsVoiceCatalog.map((voice) => voice.value);
 

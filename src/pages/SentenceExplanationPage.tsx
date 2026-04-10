@@ -33,16 +33,19 @@ import {
   previewSentenceExplanationTtsVoice,
 } from "@/lib/sentence-explanation-tts-client";
 import {
+  DEFAULT_TTS_MODEL,
   getSentenceExplanationTtsLanguageOption,
   getSentenceExplanationTtsVoiceOption,
   resolveSentenceExplanationTtsSelection,
   sentenceExplanationTtsLanguageOptions,
+  sentenceExplanationTtsModelOptions,
   sentenceExplanationTtsGenderLabels,
   sentenceExplanationTtsVoiceLabels,
   type SentenceExplanationTtsVoiceGender,
 } from "@/lib/sentence-explanation-tts-options";
 import type {
   SentenceExplanationTtsLanguage,
+  SentenceExplanationTtsModel,
   SentenceExplanationTtsPreviewResponse,
   SentenceExplanationTtsResponse,
   SentenceExplanationTtsVoice,
@@ -346,6 +349,7 @@ export default function SentenceExplanationPage() {
   const [selectedAccent, setSelectedAccent] = useState<string>(DEFAULT_TTS_SELECTION.accent);
   const [selectedGender, setSelectedGender] = useState<SentenceExplanationTtsVoiceGender>(DEFAULT_TTS_SELECTION.gender);
   const [selectedVoice, setSelectedVoice] = useState<SentenceExplanationTtsVoice>(DEFAULT_TTS_VOICE);
+  const [selectedModel, setSelectedModel] = useState<SentenceExplanationTtsModel>(DEFAULT_TTS_MODEL);
   const [previewState, setPreviewState] = useState<{
     loading: boolean;
     error: string;
@@ -419,6 +423,7 @@ export default function SentenceExplanationPage() {
       setSelectedAccent(DEFAULT_TTS_SELECTION.accent);
       setSelectedGender(DEFAULT_TTS_SELECTION.gender);
       setSelectedVoice(DEFAULT_TTS_SELECTION.voice);
+      setSelectedModel(DEFAULT_TTS_MODEL);
       setRegeneratingBlockKey(null);
       setEditingBlocks({});
       setArticleEditedSinceTts(false);
@@ -450,6 +455,7 @@ export default function SentenceExplanationPage() {
     const savedVoice =
       task.sentenceExplanation?.tts?.metadata.voice ??
       getSentenceExplanationTtsLanguageOption(savedLanguage).defaultVoice;
+    const savedModel = task.sentenceExplanation?.tts?.metadata.model ?? DEFAULT_TTS_MODEL;
     const savedSelection = resolveSentenceExplanationTtsSelection({
       language: savedLanguage,
       voice: savedVoice,
@@ -462,6 +468,7 @@ export default function SentenceExplanationPage() {
     setSelectedAccent(savedSelection.accent);
     setSelectedGender(savedSelection.gender);
     setSelectedVoice(savedSelection.voice);
+    setSelectedModel(savedModel);
     setRegeneratingBlockKey(null);
     setEditingBlocks({});
     setArticleEditedSinceTts(false);
@@ -533,7 +540,7 @@ export default function SentenceExplanationPage() {
       error: "",
       payload: null,
     });
-  }, [selectedAccent, selectedGender, selectedLanguage, selectedVoice]);
+  }, [selectedAccent, selectedGender, selectedLanguage, selectedVoice, selectedModel]);
 
   const loadExplanation = useCallback(async (options?: { branchIfExisting?: boolean }) => {
     if (!task || !explanationReady) {
@@ -761,6 +768,7 @@ export default function SentenceExplanationPage() {
       const payload = await generateSentenceExplanationTts(targetTask, article, {
         language: selectedLanguage,
         voice: voiceSelection.voice,
+        model: selectedModel,
       });
       saveSentenceExplanationTts(targetTask.id, state.payload, payload);
       setTtsLoadingProgress(100);
@@ -796,6 +804,7 @@ export default function SentenceExplanationPage() {
       const payload = await previewSentenceExplanationTtsVoice({
         language: selectedLanguage,
         voice: voiceSelection.voice,
+        model: selectedModel,
       });
       setPreviewState({
         loading: false,
@@ -1071,7 +1080,30 @@ export default function SentenceExplanationPage() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-border bg-secondary/10 p-4">
-              <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.2fr_auto]">
+              <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1fr_1.2fr_auto]">
+                <div className="space-y-2">
+                  <Label htmlFor="tts-model" className="text-sm font-medium text-foreground">
+                    语音模型
+                  </Label>
+                  <Select
+                    value={selectedModel}
+                    onValueChange={(value) => setSelectedModel(value as SentenceExplanationTtsModel)}
+                    disabled={state.loading || ttsState.loading || previewState.loading || Boolean(regeneratingBlockKey)}
+                  >
+                    <SelectTrigger id="tts-model">
+                      <SelectValue placeholder="选择模型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sentenceExplanationTtsModelOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">选择 MiniMax 语音合成模型版本。</p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="tts-language" className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
                     <Languages className="h-4 w-4 text-accent" />
@@ -1165,7 +1197,7 @@ export default function SentenceExplanationPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    当前筛出 {voiceOptions.length} 个可用音色。正文与试听都会使用当前这套语言、口音、性别和音色组合。
+                    当前筛出 {voiceOptions.length} 个可用音色。正文与试听都会使用当前这套模型、语言、口音、性别和音色组合。
                   </p>
                 </div>
 

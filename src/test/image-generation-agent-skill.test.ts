@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { generatePage11Image } from "../../server/agents/page11-image-agent";
 import { generatePage221Image } from "../../server/agents/page221-image-agent";
+import { generatePage41Image } from "../../server/agents/page41-image-agent";
 import { IMAGE_GENERATION_SKILL_NAME } from "../../server/image-generation-skill";
 
 type RuntimeWithSkill = typeof globalThis & {
@@ -42,6 +43,42 @@ describe("image generation agents runtime skill integration", () => {
         reference_image: "data:image/png;base64,reference-image",
       }),
     );
+  });
+
+  it("restricts IELTS prompt content to IELTS tips and tells the model to ignore reference-image text", async () => {
+    const skill = vi.fn().mockResolvedValue({
+      image_data_url: "data:image/png;base64,ielts-image",
+    });
+    runtime.skill = skill;
+
+    const result = await generatePage41Image({
+      ieltsTips: {
+        listening: "在听力考试中，这类长句的难点是先抓主干，再根据连接词定位细节信息。",
+        speaking: "口语里可以借用这种并列描写方式，把场景描述得更具体，但不要复述原句。",
+        reading: "阅读时应先识别主干，再拆分修饰成分，避免被冗长描述带偏。",
+        writing: "写作中可以借鉴这种层层展开的组织方式，但要改写成自己的论证句。",
+      },
+      referenceImage: "data:image/png;base64,reference-image",
+    });
+
+    expect(result.success).toBe(true);
+    expect(skill).toHaveBeenCalledTimes(1);
+    expect(skill).toHaveBeenCalledWith(
+      IMAGE_GENERATION_SKILL_NAME,
+      expect.objectContaining({
+        reference_image: "data:image/png;base64,reference-image",
+      }),
+    );
+
+    const prompt = String(skill.mock.calls[0]?.[1]?.prompt ?? "");
+
+    expect(prompt).toContain("只能使用下面提供的雅思备考解析作为文字内容来源");
+    expect(prompt).toContain("禁止出现英文原句");
+    expect(prompt).toContain("禁止出现整句中文翻译");
+    expect(prompt).toContain("参考图只用于借鉴版式、配色、边框、图标风格");
+    expect(prompt).toContain("参考图里任何可见文字都必须忽略");
+    expect(prompt).not.toContain("例句要用每个单词下方的例句");
+    expect(prompt).not.toContain("还要把例句的翻译也写上");
   });
 
   it("falls back to local translation highlights when runtime skill output is incompatible", async () => {

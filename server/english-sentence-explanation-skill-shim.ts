@@ -38,6 +38,22 @@ type ExplanationSkillParams = SentenceExplanationRequest & {
 
 type ExplanationSkillResult = Pick<SentenceExplanationResponse, "article" | "source" | "model">;
 
+type TextContentBlock = {
+  type: "text";
+  text: string;
+};
+
+type ImageContentBlock = {
+  type: "image";
+  source: {
+    type: "base64";
+    media_type: string;
+    data: string;
+  };
+};
+
+type ContentBlock = TextContentBlock | ImageContentBlock;
+
 type ParsedImageSource = {
   mediaType: string;
   data: string;
@@ -267,7 +283,35 @@ function summarizeTextContentForPrompt(textContent: ExplanationSkillParams["text
   };
 }
 
-function buildUserPrompt(params: ExplanationSkillParams) {
+function getVisionImageModules(params: ExplanationSkillParams): Array<"grammar" | "summary"> {
+  const target = params.regenerationTarget;
+  if (target?.type === "section") {
+    if (target.moduleId === "grammar") return ["grammar"];
+    if (target.moduleId === "summary") return ["summary"];
+    return [];
+  }
+  // full generation: attach both grammar and summary if available
+  return ["grammar", "summary"];
+}
+
+function parseDataUrlToImageBlock(source: string): ImageContentBlock | null {
+  const match = source.match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,(.+)$/i);
+  if (!match) {
+    return null;
+  }
+  const mediaType = match[1].toLowerCase();
+  const normalizedMediaType = mediaType === "image/jpg" ? "image/jpeg" : mediaType;
+  return {
+    type: "image",
+    source: {
+      type: "base64",
+      media_type: normalizedMediaType,
+      data: match[2],
+    },
+  };
+}
+
+function buildUserPromptText(params: ExplanationSkillParams): string {
   const imageModules = getPromptImageModules(params);
 
   const lines = [] as string[];
@@ -298,6 +342,24 @@ function buildUserPrompt(params: ExplanationSkillParams) {
   }
 
   return lines.join("\n");
+}
+
+function buildUserMessageContent(params: ExplanationSkillParams): ContentBlock[] {
+  const text = buildUserPromptText(params);
+  const blocks: ContentBlock[] = [{ type: "text", text }];
+
+  const modulesToAttach = getVisionImageModules(params);
+  for (const moduleId of modulesToAttach) {
+    const imageSource = params.images?.[moduleId];
+    if (typeof imageSource === "string" && imageSource.startsWith("data:")) {
+      const imageBlock = parseDataUrlToImageBlock(imageSource);
+      if (imageBlock) {
+        blocks.push(imageBlock);
+      }
+    }
+  }
+
+  return blocks;
 }
 
 function validateSkillParams(params: ExplanationSkillParams, env: SentenceExplanationEnv) {
@@ -543,6 +605,12 @@ async function callSkillViaLLM(
   // 构建模拟 Claude Code 的 system prompt
   const systemPrompt = buildSimulatedClaudeCodeSystemPrompt(skillPrompt, params.regenerationTarget);
 
+  const userContent = buildUserMessageContent(params);
+  const textLength = userContent
+    .filter((b): b is TextContentBlock => b.type === "text")
+    .reduce((sum, b) => sum + b.text.length, 0);
+  const imageCount = userContent.filter((b): b is ImageContentBlock => b.type === "image").length;
+
   const body = {
     model,
     max_tokens: DEFAULT_OUTPUT_MAX_TOKENS,
@@ -551,14 +619,14 @@ async function callSkillViaLLM(
     messages: [
       {
         role: "user",
-        content: buildUserPrompt(params),
+        content: userContent,
       },
     ],
   };
 
   console.log("[Skill Shim] Calling LLM with simulated Claude Code skill execution");
   console.log(`[Skill Shim] System prompt length: ${systemPrompt.length} chars`);
-  console.log(`[Skill Shim] User prompt length: ${body.messages[0].content.length} chars`);
+  console.log(`[Skill Shim] User message text length: ${textLength} chars, images: ${imageCount}`);
 
   return requestWithRetry(
     endpoint,
