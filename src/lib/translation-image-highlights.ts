@@ -28,7 +28,21 @@ export interface BuildTranslationHighlightsInput {
   vocabulary: TextAnalysisVocabularyCard[];
 }
 
+interface TranslationManualHighlightOverride {
+  index: number;
+  panel: TranslationPanelId;
+  text: string;
+  start: number;
+  end: number;
+}
+
+interface TranslationManualHighlightParseResult {
+  text: string;
+  overrides: TranslationManualHighlightOverride[];
+}
+
 const HIGHLIGHT_COLORS = ["#2563eb", "#dc2626", "#059669", "#d97706", "#7c3aed", "#db2777"];
+const MANUAL_HIGHLIGHT_PATTERN = /\/\/(\d+)\/([\s\S]*?)\/\//g;
 const SEMANTIC_CHINESE_ALIASES: Record<string, string[]> = {
   "便宜": ["廉价", "低价", "实惠"],
   "便宜货": ["廉价货", "廉价品"],
@@ -426,31 +440,151 @@ function overlapsRange(
   return occupied.some((range) => next.start < range.end && next.end > range.start);
 }
 
+function parseManualHighlightOverrides(
+  panel: TranslationPanelId,
+  text: string,
+): TranslationManualHighlightParseResult {
+  if (!text) {
+    return { text: "", overrides: [] };
+  }
+
+  const overrides: TranslationManualHighlightOverride[] = [];
+  let cleanText = "";
+  let cursor = 0;
+
+  for (const match of text.matchAll(MANUAL_HIGHLIGHT_PATTERN)) {
+    const rawMatch = match[0];
+    const rawIndex = match.index ?? -1;
+    const overrideText = match[2] ?? "";
+    const overrideIndex = Number.parseInt(match[1] ?? "", 10);
+
+    if (rawIndex < 0 || !rawMatch) {
+      continue;
+    }
+
+    cleanText += text.slice(cursor, rawIndex);
+    const start = cleanText.length;
+    cleanText += overrideText;
+    const end = cleanText.length;
+
+    if (Number.isInteger(overrideIndex) && overrideIndex > 0 && overrideText) {
+      overrides.push({
+        index: overrideIndex,
+        panel,
+        text: overrideText,
+        start,
+        end,
+      });
+    }
+
+    cursor = rawIndex + rawMatch.length;
+  }
+
+  cleanText += text.slice(cursor);
+
+  return {
+    text: cleanText,
+    overrides,
+  };
+}
+
+export function stripTranslationHighlightMarkers(text: string) {
+  return parseManualHighlightOverrides("prompt1", text).text;
+}
+
+export function listTranslationHighlightMarkerIndexes(text: string) {
+  return Array.from(
+    new Set(
+      Array.from(text.matchAll(MANUAL_HIGHLIGHT_PATTERN))
+        .map((match) => Number.parseInt(match[1] ?? "", 10))
+        .filter((index) => Number.isInteger(index) && index > 0),
+    ),
+  ).sort((left, right) => left - right);
+}
+
 export function buildTranslationHighlights(input: BuildTranslationHighlightsInput): TranslationHighlightSpan[] {
-  const highlights: TranslationHighlightSpan[] = [];
+  const highlightsByIndex: Array<TranslationHighlightSpan | undefined> = new Array(input.vocabulary.length);
+  const parsedPanels = {
+    prompt1: parseManualHighlightOverrides("prompt1", input.prompt1),
+    prompt2: parseManualHighlightOverrides("prompt2", input.prompt2),
+    prompt3: parseManualHighlightOverrides("prompt3", input.prompt3),
+    prompt4: parseManualHighlightOverrides("prompt4", input.prompt4),
+  };
+  const panelTexts: Record<TranslationPanelId, string> = {
+    prompt1: parsedPanels.prompt1.text,
+    prompt2: parsedPanels.prompt2.text,
+    prompt3: parsedPanels.prompt3.text,
+    prompt4: parsedPanels.prompt4.text,
+  };
+  const manualOverrides = {
+    prompt1: new Map(parsedPanels.prompt1.overrides.map((override) => [override.index, override])),
+    prompt2: new Map(parsedPanels.prompt2.overrides.map((override) => [override.index, override])),
+    prompt3: new Map(parsedPanels.prompt3.overrides.map((override) => [override.index, override])),
+    prompt4: new Map(parsedPanels.prompt4.overrides.map((override) => [override.index, override])),
+  };
   const occupied: Record<TranslationPanelId, Array<{ start: number; end: number }>> = {
     prompt1: [],
     prompt2: [],
     prompt3: [],
     prompt4: [],
   };
+  for (const [itemIndex, item] of input.vocabulary.entries()) {
+    const overrideIndex = itemIndex + 1;
+    const color = HIGHLIGHT_COLORS[itemIndex % HIGHLIGHT_COLORS.length];
+    const prompt1Override = manualOverrides.prompt1.get(overrideIndex);
+    const prompt2Override = manualOverrides.prompt2.get(overrideIndex);
+    const prompt3Override = manualOverrides.prompt3.get(overrideIndex);
+    const prompt4Override = manualOverrides.prompt4.get(overrideIndex);
+    const preferredEnglishPanel =
+      prompt1Override?.panel ??
+      (prompt2Override ? "prompt1" : undefined) ??
+      prompt3Override?.panel ??
+      (prompt4Override ? "prompt3" : undefined);
 
-  for (const [index, item] of input.vocabulary.entries()) {
-    const color = HIGHLIGHT_COLORS[index % HIGHLIGHT_COLORS.length];
+    const manualEnglishOverride =
+      (preferredEnglishPanel === "prompt1" ? prompt1Override : undefined) ??
+      (preferredEnglishPanel === "prompt3" ? prompt3Override : undefined) ??
+      prompt1Override ??
+      prompt3Override;
 
     const english =
-      findEnglishMatch("prompt1", input.prompt1, item.word, color) ??
-      findEnglishMatch("prompt3", input.prompt3, item.word, color);
+      (manualEnglishOverride
+        ? {
+            panel: manualEnglishOverride.panel as TranslationEnglishPanelId,
+            text: manualEnglishOverride.text,
+            start: manualEnglishOverride.start,
+            end: manualEnglishOverride.end,
+            color,
+          }
+        : null) ??
+      (preferredEnglishPanel === "prompt1"
+        ? findEnglishMatch("prompt1", panelTexts.prompt1, item.word, color)
+        : preferredEnglishPanel === "prompt3"
+          ? findEnglishMatch("prompt3", panelTexts.prompt3, item.word, color)
+          : null) ??
+      findEnglishMatch("prompt1", panelTexts.prompt1, item.word, color) ??
+      findEnglishMatch("prompt3", panelTexts.prompt3, item.word, color);
 
     if (!english || overlapsRange(occupied[english.panel], english)) {
       continue;
     }
 
     const chinesePanel = english.panel === "prompt1" ? "prompt2" : "prompt4";
-    const chineseText = chinesePanel === "prompt2" ? input.prompt2 : input.prompt4;
+    const manualChineseOverride = chinesePanel === "prompt2" ? prompt2Override : prompt4Override;
+    const chineseText = chinesePanel === "prompt2" ? panelTexts.prompt2 : panelTexts.prompt4;
     // Only use item.meaning (concise Chinese word definition).
     // item.translation is the Chinese translation of the example sentence — not panel content.
-    const chineseMatch = item.meaning ? findChineseMatch(chinesePanel, chineseText, item.meaning, color) : undefined;
+    const chineseMatch = manualChineseOverride
+      ? {
+          panel: chinesePanel,
+          text: manualChineseOverride.text,
+          start: manualChineseOverride.start,
+          end: manualChineseOverride.end,
+          color,
+        }
+      : item.meaning
+        ? findChineseMatch(chinesePanel, chineseText, item.meaning, color)
+        : undefined;
     let chinese = chineseMatch ?? undefined;
     if (chinese && overlapsRange(occupied[chinese.panel], chinese)) {
       chinese = undefined;
@@ -461,14 +595,14 @@ export function buildTranslationHighlights(input: BuildTranslationHighlightsInpu
       occupied[chinese.panel].push({ start: chinese.start, end: chinese.end });
     }
 
-    highlights.push({
-      id: item.id || `translation-highlight-${index + 1}`,
+    highlightsByIndex[itemIndex] = {
+      id: item.id || `translation-highlight-${itemIndex + 1}`,
       color,
       word: item.word,
       english,
       chinese,
-    });
+    };
   }
 
-  return highlights;
+  return highlightsByIndex.filter((highlight): highlight is TranslationHighlightSpan => Boolean(highlight));
 }

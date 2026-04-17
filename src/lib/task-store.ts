@@ -2606,6 +2606,89 @@ function emitTaskUpdate() {
   window.dispatchEvent(new Event(TASKS_UPDATED_EVENT));
 }
 
+const TASK_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
+const LAST_LOCAL_CLEANUP_AT_KEY = "english-flow.last-local-cleanup-at";
+const LOCAL_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+function isTaskExpired(task: Task): boolean {
+  const time = new Date(task.updatedAt || task.createdAt).getTime();
+  return !Number.isNaN(time) && Date.now() - time > TASK_EXPIRATION_MS;
+}
+
+function shouldRunLocalCleanup(): boolean {
+  if (!hasWindow()) return false;
+  const lastCleanupAt = localStorage.getItem(LAST_LOCAL_CLEANUP_AT_KEY);
+  if (!lastCleanupAt) return true;
+  const lastCleanupTime = Number(lastCleanupAt);
+  return Number.isNaN(lastCleanupTime) || Date.now() - lastCleanupTime >= LOCAL_CLEANUP_INTERVAL_MS;
+}
+
+function markLocalCleanupDone(): void {
+  if (hasWindow()) {
+    localStorage.setItem(LAST_LOCAL_CLEANUP_AT_KEY, String(Date.now()));
+  }
+}
+
+async function cleanupTaskAssets(task: Task) {
+  const generatedImageIds = Object.values(task.generatedImages)
+    .filter((image): image is GeneratedImage => Boolean(image?.id))
+    .map((image) => image.id);
+  const sentenceExplanationAudioIds = task.sentenceExplanation?.tts
+    ? [
+        task.sentenceExplanation.tts.introduction,
+        ...task.sentenceExplanation.tts.sections.map((section) => section.content),
+        task.sentenceExplanation.tts.conclusion,
+      ]
+        .flatMap((content) => [
+          ...(content.assetId ? [content.assetId] : []),
+          ...(content.lineAudios?.map((lineAudio) => lineAudio.assetId).filter((assetId): assetId is string => Boolean(assetId)) ?? []),
+        ])
+        .filter((assetId): assetId is string => Boolean(assetId))
+    : [];
+  const sentenceExplanationVideoIds = task.sentenceExplanation?.video?.id ? [task.sentenceExplanation.video.id] : [];
+
+  void deleteAssetData("generated-images", generatedImageIds).catch((error) => {
+    console.error("Failed to clean up generated image assets.", error);
+  });
+  void deleteAssetData("sentence-explanation-audio", sentenceExplanationAudioIds).catch((error) => {
+    console.error("Failed to clean up sentence explanation audio assets.", error);
+  });
+  void deleteAssetData("sentence-explanation-videos", sentenceExplanationVideoIds).catch((error) => {
+    console.error("Failed to clean up sentence explanation video assets.", error);
+  });
+
+  const { removeTaskImages } = await import("./image-store");
+  await Promise.all([
+    removeTaskImages(task.id, task.referenceImages, task.generatedImages),
+    removeSentenceExplanationCloudAssets(task.sentenceExplanation, task.id),
+  ]);
+  void deleteSupabaseTaskSnapshot(task.id).catch((error) => {
+    console.error("Failed to delete task snapshot from Supabase.", error);
+  });
+}
+
+async function cleanupExpiredLocalTasks(tasks: Task[]): Promise<{ tasks: Task[]; cleanedCount: number }> {
+  const expiredTasks = tasks.filter(isTaskExpired);
+  const keptTasks = tasks.filter((task) => !isTaskExpired(task));
+
+  if (!expiredTasks.length) {
+    markLocalCleanupDone();
+    return { tasks: keptTasks, cleanedCount: 0 };
+  }
+
+  for (const task of expiredTasks) {
+    try {
+      await cleanupTaskAssets(task);
+      console.log(`Cleaned up expired local task and assets for task ${task.id}.`);
+    } catch (error) {
+      console.error(`Failed to clean up expired local task ${task.id}.`, error);
+    }
+  }
+
+  markLocalCleanupDone();
+  return { tasks: keptTasks, cleanedCount: expiredTasks.length };
+}
+
 export function saveTasks(tasks: Task[]) {
   if (!hasWindow()) return;
   const normalizedTasks = tasks.map((task) =>
@@ -2626,6 +2709,21 @@ export function saveTasks(tasks: Task[]) {
   void syncTasksToSupabase(normalizedTasks).catch((error) => {
     console.error("Failed to sync task snapshots to Supabase.", error);
   });
+
+  if (shouldRunLocalCleanup()) {
+    void cleanupExpiredLocalTasks(tasks).then(({ tasks: cleanedTasks, cleanedCount }) => {
+      if (cleanedCount > 0) {
+        const cleanedNormalizedTasks = cleanedTasks.map((task) =>
+          ensureStepConsistency({
+            ...task,
+            textContent: cloneTextContent(task.textContent),
+          }),
+        );
+        writeTasksToLocalStorage(cleanedNormalizedTasks);
+        emitTaskUpdate();
+      }
+    });
+  }
 }
 
 export function loadTasks() {
@@ -2635,7 +2733,7 @@ export function loadTasks() {
 
   try {
     const parsed = JSON.parse(raw) as Task[];
-    return parsed
+    const tasks = parsed
       .map((task) =>
         ensureStepConsistency({
           ...task,
@@ -2643,6 +2741,29 @@ export function loadTasks() {
         }),
       )
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+    if (shouldRunLocalCleanup()) {
+      const expiredTasks = tasks.filter(isTaskExpired);
+      if (expiredTasks.length) {
+        const keptTasks = tasks.filter((task) => !isTaskExpired(task));
+        void cleanupExpiredLocalTasks(tasks).then(({ cleanedCount }) => {
+          if (cleanedCount > 0) {
+            const cleanedNormalizedTasks = keptTasks.map((task) =>
+              ensureStepConsistency({
+                ...task,
+                textContent: cloneTextContent(task.textContent),
+              }),
+            );
+            writeTasksToLocalStorage(cleanedNormalizedTasks);
+            emitTaskUpdate();
+          }
+        });
+        return keptTasks;
+      }
+      markLocalCleanupDone();
+    }
+
+    return tasks;
   } catch {
     return [] as Task[];
   }
@@ -3539,48 +3660,7 @@ export async function deleteTask(taskId: string) {
   saveTasks(tasks);
 
   if (!removedTask) return;
-
-  const generatedImageIds = Object.values(removedTask.generatedImages)
-    .filter((image): image is GeneratedImage => Boolean(image?.id))
-    .map((image) => image.id);
-  const sentenceExplanationAudioIds = removedTask.sentenceExplanation?.tts
-    ? [
-        removedTask.sentenceExplanation.tts.introduction,
-        ...removedTask.sentenceExplanation.tts.sections.map((section) => section.content),
-        removedTask.sentenceExplanation.tts.conclusion,
-      ]
-        .flatMap((content) => [
-          ...(content.assetId ? [content.assetId] : []),
-          ...(content.lineAudios?.map((lineAudio) => lineAudio.assetId).filter((assetId): assetId is string => Boolean(assetId)) ?? []),
-        ])
-        .filter((assetId): assetId is string => Boolean(assetId))
-    : [];
-  const sentenceExplanationVideoIds = removedTask.sentenceExplanation?.video?.id
-    ? [removedTask.sentenceExplanation.video.id]
-    : [];
-
-  // 删除本地缓存
-  void deleteAssetData("generated-images", generatedImageIds).catch((error) => {
-    console.error("Failed to clean up generated image assets.", error);
-  });
-  void deleteAssetData("sentence-explanation-audio", sentenceExplanationAudioIds).catch((error) => {
-    console.error("Failed to clean up sentence explanation audio assets.", error);
-  });
-  void deleteAssetData("sentence-explanation-videos", sentenceExplanationVideoIds).catch((error) => {
-    console.error("Failed to clean up sentence explanation video assets.", error);
-  });
-
-  // 删除云端存储的图片
-  const { removeTaskImages } = await import("./image-store");
-  await removeTaskImages(
-    taskId,
-    removedTask.referenceImages,
-    removedTask.generatedImages
-  );
-  await removeSentenceExplanationCloudAssets(removedTask.sentenceExplanation, taskId);
-  void deleteSupabaseTaskSnapshot(taskId).catch((error) => {
-    console.error("Failed to delete task snapshot from Supabase.", error);
-  });
+  await cleanupTaskAssets(removedTask);
 }
 
 export async function deleteTaskWorkflow(taskOrId: string | Task) {
@@ -3970,6 +4050,60 @@ export function hasGeneratedImageSource(
 
 export function defaultReferenceImages() {
   return emptyReferenceRecord();
+}
+
+const LAST_CLEANUP_AT_KEY = "english-flow.last-cleanup-at";
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const SNAPSHOT_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+export async function cleanupExpiredSupabaseSnapshots() {
+  if (!isSupabaseConfigured()) {
+    return;
+  }
+
+  const lastCleanupAt = hasWindow() ? localStorage.getItem(LAST_CLEANUP_AT_KEY) : null;
+  if (lastCleanupAt) {
+    const lastCleanupTime = Number(lastCleanupAt);
+    if (!Number.isNaN(lastCleanupTime) && Date.now() - lastCleanupTime < CLEANUP_INTERVAL_MS) {
+      return;
+    }
+  }
+
+  const result = await loadSupabaseTaskSnapshots<Task>();
+  if (!result.success) {
+    console.error("Failed to load Supabase task snapshots for cleanup.", result.error);
+    return;
+  }
+
+  const cutoffTime = Date.now() - SNAPSHOT_EXPIRATION_MS;
+  const expiredTasks = result.tasks.filter((task) => {
+    const updatedAt = task?.updatedAt ? new Date(task.updatedAt).getTime() : NaN;
+    return !Number.isNaN(updatedAt) && updatedAt < cutoffTime;
+  });
+
+  if (!expiredTasks.length) {
+    if (hasWindow()) {
+      localStorage.setItem(LAST_CLEANUP_AT_KEY, String(Date.now()));
+    }
+    return;
+  }
+
+  const { removeTaskImages } = await import("./image-store");
+
+  for (const task of expiredTasks) {
+    try {
+      await removeTaskImages(task.id, task.referenceImages ?? {}, task.generatedImages ?? {});
+      await removeSentenceExplanationCloudAssets(task.sentenceExplanation, task.id);
+      await deleteSupabaseTaskSnapshot(task.id);
+      console.log(`Cleaned up expired Supabase snapshot and assets for task ${task.id}.`);
+    } catch (error) {
+      console.error(`Failed to clean up expired Supabase snapshot for task ${task.id}.`, error);
+    }
+  }
+
+  if (hasWindow()) {
+    localStorage.setItem(LAST_CLEANUP_AT_KEY, String(Date.now()));
+  }
 }
 
 /**

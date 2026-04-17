@@ -3,6 +3,88 @@ import { describe, expect, it } from "vitest";
 import { buildTranslationHighlights } from "@/lib/translation-image-highlights";
 
 describe("buildTranslationHighlights", () => {
+  it("lets manual //index/text// markers override only the targeted english and chinese highlight spans", () => {
+    const highlights = buildTranslationHighlights({
+      prompt1: "The //1/tang// inspired a swift trip.",
+      prompt2: "这股//1/气息//激励了一次轻快的出行。",
+      prompt3: "It felt jolly near the aisle with a \"//6/chew//\" of gum.",
+      prompt4: "在过道旁拿着一块“可//6/嚼//”的口香糖，让人觉得愉快。",
+      vocabulary: [
+        {
+          id: "vocab-tang",
+          word: "tang",
+          phonetic: "",
+          partOfSpeech: "n.",
+          meaning: "气味",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-inspired",
+          word: "inspired",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "激励",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-trip",
+          word: "trip",
+          phonetic: "",
+          partOfSpeech: "n.",
+          meaning: "出行",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-jolly",
+          word: "jolly",
+          phonetic: "",
+          partOfSpeech: "adj.",
+          meaning: "愉快",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-aisle",
+          word: "aisle",
+          phonetic: "",
+          partOfSpeech: "n.",
+          meaning: "过道",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-chew",
+          word: "chew",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "咀嚼",
+          example: "",
+          translation: "",
+        },
+      ],
+    });
+
+    expect(highlights).toHaveLength(6);
+
+    expect(highlights[0].english.text).toBe("tang");
+    expect(highlights[0].chinese?.text).toBe("气息");
+    expect(highlights[0].english.color).toBe(highlights[0].chinese?.color);
+
+    expect(highlights[1].chinese?.text).toBe("激励");
+    expect(highlights[2].chinese?.text).toBe("出行");
+    expect(highlights[3].chinese?.text).toBe("愉快");
+    expect(highlights[4].chinese?.text).toBe("过道");
+
+    expect(highlights[5].english.panel).toBe("prompt3");
+    expect(highlights[5].english.text).toBe("chew");
+    expect(highlights[5].chinese?.panel).toBe("prompt4");
+    expect(highlights[5].chinese?.text).toBe("嚼");
+    expect(highlights[5].english.color).toBe(highlights[5].chinese?.color);
+  });
+
   it("pairs english words with matching chinese meanings in the corresponding panels", () => {
     const highlights = buildTranslationHighlights({
       prompt1: "After all, Xury's advice was good, and I took it;",
@@ -391,5 +473,94 @@ describe("buildTranslationHighlights", () => {
     expect(highlights).toHaveLength(1);
     expect(highlights[0].english.text.toLowerCase()).toBe("thorny");
     expect(highlights[0].chinese?.text).toBe("带刺");
+  });
+
+  it("uses manual //index/text// overrides for selected vocabulary items without disturbing other automatic highlights", () => {
+    const highlights = buildTranslationHighlights({
+      prompt1:
+        "There was a //1/tang// in the very air that inspired the hearts of small maidens //3/tripping//, unlike snails, swiftly and willingly to school;",
+      prompt2:
+        "空气中弥漫着一股令人心旷神怡的//1/气息//，//2/激励//着小姑娘们的心，让她们不像蜗牛那样慢吞吞，而是，//3/轻快地//，又心甘情愿地走向学校；",
+      prompt3:
+        "and it was //4/jolly// to be back again at the little brown desk beside Diana, with Ruby Gillis nodding across the //5/aisle// and Julia Bell passing a \"//6/chew//\" of gum down from the back seat.",
+      prompt4:
+        "回到黛安娜身边那张棕色小书桌旁是多么//4/愉快//啊，鲁比·吉利斯在过道对面点头微笑，朱莉娅·贝尔从后排递过来一块“可//6/嚼//”的口香糖。",
+      vocabulary: [
+        {
+          id: "vocab-tang",
+          word: "tang",
+          phonetic: "",
+          partOfSpeech: "n.",
+          meaning: "气味",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-inspired",
+          word: "inspired",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "激励",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-tripping",
+          word: "tripping",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "轻快地",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-jolly",
+          word: "jolly",
+          phonetic: "",
+          partOfSpeech: "adj.",
+          meaning: "愉快",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-aisle",
+          word: "aisle",
+          phonetic: "",
+          partOfSpeech: "n.",
+          meaning: "过道",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-chew",
+          word: "chew",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "咀嚼",
+          example: "",
+          translation: "",
+        },
+      ],
+    });
+
+    expect(highlights).toHaveLength(6);
+
+    const tang = highlights.find((highlight) => highlight.word === "tang");
+    expect(tang?.english.panel).toBe("prompt1");
+    expect(tang?.english.text).toBe("tang");
+    expect(tang?.chinese?.panel).toBe("prompt2");
+    expect(tang?.chinese?.text).toBe("气息");
+    expect(tang?.color).toBe(tang?.chinese?.color);
+
+    const inspired = highlights.find((highlight) => highlight.word === "inspired");
+    expect(inspired?.english.text.toLowerCase()).toBe("inspired");
+    expect(inspired?.chinese?.text).toBe("激励");
+
+    const chew = highlights.find((highlight) => highlight.word === "chew");
+    expect(chew?.english.panel).toBe("prompt3");
+    expect(chew?.english.text).toBe("chew");
+    expect(chew?.chinese?.panel).toBe("prompt4");
+    expect(chew?.chinese?.text).toBe("嚼");
+    expect(chew?.color).toBe(chew?.chinese?.color);
   });
 });

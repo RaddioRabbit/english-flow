@@ -119,7 +119,7 @@ function buildSentenceExplanationTts() {
       language: "en" as const,
       voice: "English_Trustworthy_Man" as const,
       speed: 1,
-      generatedAt: "2026-03-17T00:00:00.000Z",
+      generatedAt: "2099-01-01T00:00:00.000Z",
       totalSegments: 4,
       successfulSegments: 4,
     },
@@ -129,7 +129,7 @@ function buildSentenceExplanationTts() {
 }
 
 function buildTask(): Task {
-  const now = "2026-03-17T00:00:00.000Z";
+  const now = "2099-01-01T00:00:00.000Z";
 
   return {
     id: "task-1",
@@ -153,7 +153,7 @@ function buildTask(): Task {
   };
 }
 
-function buildGeneratedImage(moduleId: ModuleId, now = "2026-03-17T00:00:00.000Z") {
+function buildGeneratedImage(moduleId: ModuleId, now = "2099-01-01T00:00:00.000Z") {
   return {
     id: `image-${moduleId}`,
     imageType: moduleId,
@@ -207,7 +207,7 @@ describe("createRevisionTask", () => {
   });
 
   it("creates a new history record that carries over untouched images without mutating the original task", async () => {
-    const now = "2026-03-17T00:00:00.000Z";
+    const now = "2099-01-01T00:00:00.000Z";
     const originalTask: Task = {
       ...buildTask(),
       modules: ["translation", "grammar", "summary", "vocabulary", "ielts"],
@@ -292,9 +292,9 @@ describe("loadTasks", () => {
       progress: 100,
       currentStage: "done",
       flowMode: "all",
-      createdAt: "2026-03-17T00:00:00.000Z",
-      updatedAt: "2026-03-17T00:00:00.000Z",
-      completedAt: "2026-03-17T00:00:00.000Z",
+      createdAt: "2099-01-01T00:00:00.000Z",
+      updatedAt: "2099-01-01T00:00:00.000Z",
+      completedAt: "2099-01-01T00:00:00.000Z",
     };
 
     window.localStorage.setItem("english-flow.tasks.v2", JSON.stringify([legacyTask]));
@@ -326,9 +326,9 @@ describe("loadTasks", () => {
       progress: 100,
       currentStage: "done",
       flowMode: "all",
-      createdAt: "2026-03-17T00:00:00.000Z",
-      updatedAt: "2026-03-17T00:00:00.000Z",
-      completedAt: "2026-03-17T00:00:00.000Z",
+      createdAt: "2099-01-01T00:00:00.000Z",
+      updatedAt: "2099-01-01T00:00:00.000Z",
+      completedAt: "2099-01-01T00:00:00.000Z",
     };
 
     window.localStorage.setItem("english-flow.tasks.v2", JSON.stringify([legacyTask]));
@@ -338,6 +338,50 @@ describe("loadTasks", () => {
     expect(tasks[0].textContent.prompt2).toBe("航行初期的天气状况和沿海岸线的行程，直到抵达圣奥古斯丁角。");
     expect(tasks[0].textContent.prompt4).toBe("从圣奥古斯丁角起远离海岸，驶离陆地视线。");
   });
+
+  it("removes tasks older than 30 days on load", () => {
+    const expiredTask = {
+      id: "expired-task",
+      sentence: "Expired sentence",
+      bookName: "Expired book",
+      author: "Expired author",
+      modules: ["translation"],
+      textContent: buildTextContent(),
+      steps: [],
+      logs: [],
+      status: "completed",
+      progress: 100,
+      currentStage: "done",
+      flowMode: "all",
+      createdAt: "2000-01-01T00:00:00.000Z",
+      updatedAt: "2000-01-01T00:00:00.000Z",
+      completedAt: "2000-01-01T00:00:00.000Z",
+    };
+    const freshTask = {
+      id: "fresh-task",
+      sentence: "Fresh sentence",
+      bookName: "Fresh book",
+      author: "Fresh author",
+      modules: ["translation"],
+      textContent: buildTextContent(),
+      steps: [],
+      logs: [],
+      status: "completed",
+      progress: 100,
+      currentStage: "done",
+      flowMode: "all",
+      createdAt: "2099-01-01T00:00:00.000Z",
+      updatedAt: "2099-01-01T00:00:00.000Z",
+      completedAt: "2099-01-01T00:00:00.000Z",
+    };
+
+    window.localStorage.setItem("english-flow.tasks.v2", JSON.stringify([expiredTask, freshTask]));
+    window.localStorage.removeItem("english-flow.last-local-cleanup-at");
+
+    const tasks = loadTasks();
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].id).toBe("fresh-task");
+  });
 });
 
 describe("getHistoryTasks", () => {
@@ -346,7 +390,7 @@ describe("getHistoryTasks", () => {
   });
 
   it("collapses legacy sentence explanation revisions into the newest generated page", () => {
-    const imageTimestamp = "2026-03-17T00:00:00.000Z";
+    const imageTimestamp = "2099-01-01T00:00:00.000Z";
     const rootTask: Task = {
       ...buildTask(),
       id: "task-root",
@@ -355,8 +399,8 @@ describe("getHistoryTasks", () => {
         grammar: buildGeneratedImage("grammar", imageTimestamp),
       },
       resumeRoute: "result",
-      updatedAt: "2026-03-17T00:00:00.000Z",
-      completedAt: "2026-03-17T00:00:00.000Z",
+      updatedAt: "2099-01-01T00:00:00.000Z",
+      completedAt: "2099-01-01T00:00:00.000Z",
     };
     const explanationTask: Task = {
       ...buildTask(),
@@ -370,12 +414,12 @@ describe("getHistoryTasks", () => {
         tts: null,
         video: null,
         stage: "article",
-        updatedAt: "2026-03-18T00:00:00.000Z",
+        updatedAt: "2099-01-01T00:00:00.000Z",
       },
       resumeRoute: "explanation",
-      createdAt: "2026-03-18T00:00:00.000Z",
-      updatedAt: "2026-03-18T00:00:00.000Z",
-      completedAt: "2026-03-18T00:00:00.000Z",
+      createdAt: "2099-01-01T00:00:00.000Z",
+      updatedAt: "2099-01-01T00:00:00.000Z",
+      completedAt: "2099-01-01T00:00:00.000Z",
     };
     const videoTask: Task = {
       ...buildTask(),
@@ -393,15 +437,15 @@ describe("getHistoryTasks", () => {
           mimeType: "video/mp4",
           dataUrl: "data:video/mp4;base64,video",
           durationSeconds: 12,
-          createdAt: "2026-03-19T00:00:00.000Z",
+          createdAt: "2099-01-01T00:00:00.000Z",
         },
         stage: "video",
-        updatedAt: "2026-03-19T00:00:00.000Z",
+        updatedAt: "2099-01-01T00:00:00.000Z",
       },
       resumeRoute: "video",
-      createdAt: "2026-03-19T00:00:00.000Z",
-      updatedAt: "2026-03-19T00:00:00.000Z",
-      completedAt: "2026-03-19T00:00:00.000Z",
+      createdAt: "2099-01-01T00:00:00.000Z",
+      updatedAt: "2099-01-01T00:00:00.000Z",
+      completedAt: "2099-01-01T00:00:00.000Z",
     };
 
     saveTasks([rootTask, explanationTask, videoTask]);
@@ -429,10 +473,10 @@ describe("getHistoryTasks", () => {
           mimeType: "video/mp4",
           dataUrl: "data:video/mp4;base64,video",
           durationSeconds: 12,
-          createdAt: "2026-03-19T00:00:00.000Z",
+          createdAt: "2099-01-01T00:00:00.000Z",
         },
         stage: "video",
-        updatedAt: "2026-03-19T00:00:00.000Z",
+        updatedAt: "2099-01-01T00:00:00.000Z",
       },
       resumeRoute: "explanation",
     };
@@ -448,7 +492,7 @@ describe("createSentenceExplanationRevisionTask", () => {
   });
 
   it("creates a new history record that preserves prior explanation assets while cloning carried results", async () => {
-    const now = "2026-03-17T00:00:00.000Z";
+    const now = "2099-01-01T00:00:00.000Z";
     const originalTask: Task = {
       ...buildTask(),
       modules: ["translation", "grammar"],
@@ -527,7 +571,7 @@ describe("createSentenceExplanationArticleTask", () => {
   });
 
   it("creates a separate history record for the first generated sentence explanation article", async () => {
-    const now = "2026-03-17T00:00:00.000Z";
+    const now = "2099-01-01T00:00:00.000Z";
     const originalTask: Task = {
       ...buildTask(),
       id: "task-image-only",
@@ -567,7 +611,7 @@ describe("saveSentenceExplanationVideo", () => {
   });
 
   it("assigns a fresh video asset id when replacing an existing exported video", async () => {
-    const now = "2026-03-17T00:00:00.000Z";
+    const now = "2099-01-01T00:00:00.000Z";
     const originalTask: Task = {
       ...buildTask(),
       sentenceExplanation: {
@@ -595,7 +639,7 @@ describe("saveSentenceExplanationVideo", () => {
       mimeType: "video/mp4",
       dataUrl: "data:video/mp4;base64,new-video",
       durationSeconds: 12,
-      createdAt: "2026-03-18T00:00:00.000Z",
+      createdAt: "2099-01-01T00:00:00.000Z",
     });
 
     const storedTask = loadTasks().find((task) => task.id === originalTask.id);

@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { listTranslationHighlightMarkerIndexes } from "@/lib/translation-image-highlights";
 import { prepareTranslationImagePanels } from "@/lib/translation-image-prompt";
 import {
   completeTaskTextAnalysis,
@@ -62,6 +63,11 @@ function formatElapsedDuration(elapsedMs: number) {
   return `${minutes} 分 ${seconds.toString().padStart(2, "0")} 秒`;
 }
 
+function describeTranslationMarkerDraft(prompts: Array<string | undefined>) {
+  const indexes = Array.from(new Set(prompts.flatMap((prompt) => listTranslationHighlightMarkerIndexes(prompt ?? ""))));
+  return indexes.length ? `已识别手动标注编号：${indexes.join("、")}` : "未识别到手动标注，将继续使用自动高亮。";
+}
+
 export default function EditTaskPage() {
   const { taskId } = useParams();
   const navigate = useNavigate();
@@ -76,6 +82,10 @@ export default function EditTaskPage() {
   const [regeneratingSection, setRegeneratingSection] = useState<TextAnalysisMode | null>(null);
   const [activeParsingStep, setActiveParsingStep] = useState<{ mode: TextAnalysisMode; startedAt: number } | null>(null);
   const [parsingClock, setParsingClock] = useState(() => Date.now());
+  const translationMarkerHint = useMemo(
+    () => describeTranslationMarkerDraft([draft?.prompt1, draft?.prompt2, draft?.prompt3, draft?.prompt4]),
+    [draft?.prompt1, draft?.prompt2, draft?.prompt3, draft?.prompt4],
+  );
 
   useEffect(() => {
     if (!task || dirty) return;
@@ -548,6 +558,11 @@ export default function EditTaskPage() {
               <p className="mt-3 text-xs leading-6 text-muted-foreground">
                 系统会优先在 and / but / or、分号、从句边界等自然停顿处拆分，方便后续做句译对照图。
               </p>
+              <div className="mt-3 rounded-lg border border-border/60 bg-secondary/10 px-3 py-2 text-xs leading-6 text-muted-foreground">
+                <p>高级标注：用 <code>//编号/文本//</code> 手动覆盖句译对照图下划线范围，同编号英中同色。</p>
+                <p>示例：<code>Prompt1: ... //1/tang// ...</code>，<code>Prompt2: ... //1/气息// ...</code>。</p>
+                <p>{translationMarkerHint}</p>
+              </div>
             </section>
 
             <section className="rounded-2xl border border-border bg-card p-6 shadow-elegant">
@@ -741,4 +756,3 @@ export default function EditTaskPage() {
     </div>
   );
 }
-

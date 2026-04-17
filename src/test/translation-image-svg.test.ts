@@ -196,4 +196,51 @@ describe("buildTranslationImageSvgDataUrl", () => {
       expect(colors[0]).not.toBe(colors[2]);
     }
   });
+
+  it("removes manual //index/text// markers from rendered panel text while keeping the manual highlight spans", () => {
+    const dataUrl = buildTranslationImageSvgDataUrl({
+      bookName: "Anne of Green Gables",
+      author: "L. M. Montgomery",
+      originSentence: "There was a tang in the air and a chew of gum.",
+      prompt1: "There was a //1/tang// in the air.",
+      prompt2: "空气中弥漫着一股//1/气息//。",
+      prompt3: "She passed a \"//2/chew//\" of gum.",
+      prompt4: "她递来一块“可//2/嚼//”的口香糖。",
+      vocabulary: [
+        {
+          id: "vocab-tang",
+          word: "tang",
+          phonetic: "",
+          partOfSpeech: "n.",
+          meaning: "气味",
+          example: "",
+          translation: "",
+        },
+        {
+          id: "vocab-chew",
+          word: "chew",
+          phonetic: "",
+          partOfSpeech: "v.",
+          meaning: "咀嚼",
+          example: "",
+          translation: "",
+        },
+      ],
+      sceneImageDataUrl: undefined,
+    });
+
+    const svg = decodeURIComponent(dataUrl.replace("data:image/svg+xml;charset=utf-8,", ""));
+
+    expect(svg).not.toContain("//1/");
+    expect(svg).not.toContain("//2/");
+
+    const underlinedTexts = Array.from(
+      svg.matchAll(/<tspan fill="[^"]+" text-decoration="underline">([^<]+)<\/tspan>/g),
+      (match) => match[1],
+    );
+    expect(underlinedTexts).toContain("tang");
+    expect(underlinedTexts).toContain("气息");
+    expect(underlinedTexts).toContain("chew");
+    expect(underlinedTexts).toContain("嚼");
+  });
 });

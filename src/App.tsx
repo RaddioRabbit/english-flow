@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/AppLayout";
+import { cleanupExpiredSupabaseSnapshots } from "@/lib/task-store";
 import AboutPage from "@/pages/AboutPage";
 import CreateTaskPage from "@/pages/CreateTask";
 import EditTaskPage from "@/pages/EditTaskPage";
@@ -18,31 +20,43 @@ import TextTransferPage from "@/pages/TextTransferPage";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<CreateTaskPage />} />
-            <Route path="/sentence-agent" element={<CreateTaskPage />} />
-            <Route path="/create-task" element={<CreateTaskPage />} />
-            <Route path="/edit/:taskId" element={<EditTaskPage />} />
-            <Route path="/task/:taskId" element={<TaskExecutionPage />} />
-            <Route path="/explanation/:taskId" element={<SentenceExplanationPage />} />
-            <Route path="/explanation/:taskId/video" element={<SentenceExplanationVideoPage />} />
-            <Route path="/result/:taskId" element={<TaskResultsPage />} />
-            <Route path="/text-transfer" element={<TextTransferPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/about" element={<AboutPage />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+function App() {
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      void cleanupExpiredSupabaseSnapshots().catch((error) => {
+        console.error("Failed to cleanup expired Supabase snapshots.", error);
+      });
+    }, 3000);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<CreateTaskPage />} />
+              <Route path="/sentence-agent" element={<CreateTaskPage />} />
+              <Route path="/create-task" element={<CreateTaskPage />} />
+              <Route path="/edit/:taskId" element={<EditTaskPage />} />
+              <Route path="/task/:taskId" element={<TaskExecutionPage />} />
+              <Route path="/explanation/:taskId" element={<SentenceExplanationPage />} />
+              <Route path="/explanation/:taskId/video" element={<SentenceExplanationVideoPage />} />
+              <Route path="/result/:taskId" element={<TaskResultsPage />} />
+              <Route path="/text-transfer" element={<TextTransferPage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/about" element={<AboutPage />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
 
 export default App;

@@ -34,6 +34,7 @@ export interface TextAnalysisIeltsTips {
 
 export interface TextAnalysisContent {
   translation: string;
+  context?: string;
   prompt1: string;
   prompt2: string;
   prompt3: string;

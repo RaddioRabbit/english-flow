@@ -1,6 +1,7 @@
 import type { TextAnalysisVocabularyCard } from "./text-analysis-contract";
 import {
   buildTranslationHighlights,
+  stripTranslationHighlightMarkers,
   type TranslationHighlightMatch,
   type TranslationHighlightSpan,
 } from "./translation-image-highlights";
@@ -314,10 +315,10 @@ export function buildTranslationImageSvgDataUrl(input: TranslationImageSvgInput)
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SVG_W}" height="${SVG_H}" viewBox="0 0 ${SVG_W} ${SVG_H}">
   <rect width="${SVG_W}" height="${SVG_H}" rx="24" fill="${C_BG}"/>
-  ${renderPanel(M, M, panels.prompt1, p1M, "en")}
-  ${renderPanel(COL2_X, M, panels.prompt2, p2M, "zh")}
-  ${renderPanel(M, ROW2_Y, panels.prompt3, p3M, "en")}
-  ${renderPanel(COL2_X, ROW2_Y, panels.prompt4, p4M, "zh")}
+  ${renderPanel(M, M, stripTranslationHighlightMarkers(panels.prompt1), p1M, "en")}
+  ${renderPanel(COL2_X, M, stripTranslationHighlightMarkers(panels.prompt2), p2M, "zh")}
+  ${renderPanel(M, ROW2_Y, stripTranslationHighlightMarkers(panels.prompt3), p3M, "en")}
+  ${renderPanel(COL2_X, ROW2_Y, stripTranslationHighlightMarkers(panels.prompt4), p4M, "zh")}
   ${renderScene(input.sceneImageDataUrl)}
 </svg>`;
 
@@ -360,10 +361,10 @@ export function buildTranslationImageSvgDataUrlWithHighlights(
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SVG_W}" height="${SVG_H}" viewBox="0 0 ${SVG_W} ${SVG_H}">
   <rect width="${SVG_W}" height="${SVG_H}" rx="24" fill="${C_BG}"/>
-  ${renderPanel(M, M, panels.prompt1, p1M, "en")}
-  ${renderPanel(COL2_X, M, panels.prompt2, p2M, "zh")}
-  ${renderPanel(M, ROW2_Y, panels.prompt3, p3M, "en")}
-  ${renderPanel(COL2_X, ROW2_Y, panels.prompt4, p4M, "zh")}
+  ${renderPanel(M, M, stripTranslationHighlightMarkers(panels.prompt1), p1M, "en")}
+  ${renderPanel(COL2_X, M, stripTranslationHighlightMarkers(panels.prompt2), p2M, "zh")}
+  ${renderPanel(M, ROW2_Y, stripTranslationHighlightMarkers(panels.prompt3), p3M, "en")}
+  ${renderPanel(COL2_X, ROW2_Y, stripTranslationHighlightMarkers(panels.prompt4), p4M, "zh")}
   ${renderScene(input.sceneImageDataUrl)}
 </svg>`;
 

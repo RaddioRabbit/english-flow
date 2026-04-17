@@ -1,3 +1,5 @@
+import { stripTranslationHighlightMarkers } from "./translation-image-highlights";
+
 export interface TranslationImagePromptInput {
   originSentence: string;
   prompt1: string;
@@ -219,10 +221,10 @@ export function buildTranslationImagePrompt(input: TranslationImagePromptInput) 
     "请生成一张竖版 3:4 的英语教学插画，总布局为 6 宫格，其中最下方第 5、6 格合并为 1 个横向大场景。",
     "整体风格统一：复古旧纸背景、羊皮纸卷轴文本框、干净线条、柔和配色、适合小红书英语学习内容。",
     "上方前四个宫格的规则：",
-    buildPanelInstruction(1, "英文", panels.prompt1),
-    buildPanelInstruction(2, "中文", panels.prompt2),
-    buildPanelInstruction(3, "英文", panels.prompt3),
-    buildPanelInstruction(4, "中文", panels.prompt4),
+    buildPanelInstruction(1, "英文", stripTranslationHighlightMarkers(panels.prompt1)),
+    buildPanelInstruction(2, "中文", stripTranslationHighlightMarkers(panels.prompt2)),
+    buildPanelInstruction(3, "英文", stripTranslationHighlightMarkers(panels.prompt3)),
+    buildPanelInstruction(4, "中文", stripTranslationHighlightMarkers(panels.prompt4)),
     "上方前四个宫格严格禁止出现这些内容：前半部分、后半部分、前半句、后半句、第一部分、第二部分、Part 1、Part 2、Prompt1、Prompt2、Prompt3、Prompt4、英文原句、中文翻译、解释说明、语法讲解、词汇讲解、书名、作者名、页眉页脚、对话气泡、旁白框。",
     "下方合并大图的规则：",
     "只绘制英语原句真实描述的场景，只保留与原句直接相关的人物、动作、环境、时间氛围和关键物体。",

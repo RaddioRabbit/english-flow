@@ -76,4 +76,21 @@ describe("buildTranslationImagePrompt", () => {
     expect(prompt).toContain("下方合并大图里不要出现任何文字元素");
     expect(prompt).not.toContain("A peaceful scene from");
   });
+
+  it("strips manual //index/text// markers before composing the image-generation prompt", () => {
+    const prompt = buildTranslationImagePrompt({
+      originSentence: "There was a tang in the air and a chew of gum.",
+      prompt1: "There was a //1/tang// in the air.",
+      prompt2: "空气中弥漫着一股//1/气息//。",
+      prompt3: "She passed a \"//2/chew//\" of gum.",
+      prompt4: "她递来一块“可//2/嚼//”的口香糖。",
+    });
+
+    expect(prompt).toContain("There was a tang in the air.");
+    expect(prompt).toContain("空气中弥漫着一股气息。");
+    expect(prompt).toContain('She passed a "chew" of gum.');
+    expect(prompt).toContain("她递来一块“可嚼”的口香糖。");
+    expect(prompt).not.toContain("//1/");
+    expect(prompt).not.toContain("//2/");
+  });
 });

@@ -128,11 +128,15 @@ export async function removeTaskImages(
 
   await deleteAssetData(
     "reference-assets",
-    referenceAssets.map((asset) => asset.id).filter((id): id is string => Boolean(id)),
+    referenceAssets
+      .map((asset) => `${asset.id || taskId}/${asset.fileName}`)
+      .filter((key): key is string => Boolean(key)),
   );
   await deleteAssetData(
     "generated-images",
-    generatedAssets.map((asset) => asset.id).filter((id): id is string => Boolean(id)),
+    generatedAssets
+      .map((asset) => `${asset.id || taskId}/${asset.fileName}`)
+      .filter((key): key is string => Boolean(key)),
   );
 
   if (isSupabaseConfigured()) {

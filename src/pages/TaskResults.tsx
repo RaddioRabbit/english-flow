@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { isSupabaseConfigured } from "@/lib/image-store";
 import { downloadAllImages, downloadGeneratedImage, sharePage } from "@/lib/media-utils";
+import { listTranslationHighlightMarkerIndexes } from "@/lib/translation-image-highlights";
 import {
   createRevisionTask,
   duplicateTaskForRegeneration,
@@ -125,6 +126,11 @@ function buildSyncMessage(result: { uploaded: number; failed: number }) {
   }
 
   return "当前生成图已完成云端同步。";
+}
+
+function describeTranslationMarkerIndexes(text: string) {
+  const indexes = listTranslationHighlightMarkerIndexes(text);
+  return indexes.length ? `已识别手动标注编号：${indexes.join("、")}` : "未识别到手动标注，将继续使用自动高亮。";
 }
 
 export default function TaskResultsPage() {
@@ -461,6 +467,8 @@ export default function TaskResultsPage() {
               const editedText = editingTexts[detailModule.moduleId] ?? moduleText;
               const isRegenerating = regeneratingModules.has(detailModule.moduleId);
               const hasChanges = editedText !== moduleText;
+              const translationMarkerHint =
+                detailModule.moduleId === "translation" ? describeTranslationMarkerIndexes(editedText) : "";
               const sectionKey = detailModule.image?.id ?? detailModule.moduleId;
               const previewIndex = detailModule.image ? images.findIndex((image) => image.id === detailModule.image?.id) : -1;
               const title = detailModule.image?.title ?? moduleTitle(detailModule.moduleId);
@@ -531,6 +539,13 @@ export default function TaskResultsPage() {
                             </Button>
                           </div>
                         </div>
+                        {detailModule.moduleId === "translation" ? (
+                          <div className="mt-3 rounded-lg border border-border/60 bg-background/70 px-3 py-2 text-xs leading-6 text-muted-foreground">
+                            <p>高级标注：用 <code>//编号/文本//</code> 手动覆盖句译对照图下划线范围，同编号英中同色。</p>
+                            <p>示例：<code>//1/tang//</code> 对应 <code>//1/气息//</code>，只影响当前编号，其余词仍按自动高亮。</p>
+                            <p>{translationMarkerHint}</p>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="rounded-xl border border-border/50 bg-secondary/10 p-3">
