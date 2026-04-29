@@ -1,73 +1,38 @@
-# Welcome to your Lovable project
+# English Flow Agent
 
-## Project info
+英语句子分析与教育内容生成工具。输入一句英语，自动解析并生成翻译对照、语法分析、词汇解析、雅思备考等模块化学习材料，以条漫风格图片呈现。
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## 功能
 
-## How can I edit this code?
+- **句译对照图** — 句子翻译与对照
+- **句式分析图** — 语法结构与解析
+- **句式总结图** — 结构归纳总结
+- **词汇解析图** — 重点词汇卡片
+- **雅思备考图** — IELTS 相关技巧
+- **句子讲解文章** — 带 TTS 语音的完整讲解
+- **视频合成** — 将讲解图片与语音合成为视频
 
-There are several ways of editing your application.
+## 技术栈
 
-**Use Lovable**
+- Vite 5 + React 18 + TypeScript
+- Tailwind CSS + shadcn/ui
+- React Query + localStorage
+- Playwright + Vitest
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## 开发
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
+```bash
 npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+npm run dev    # http://localhost:8080
+npm run build
+npm run test
 ```
 
-**Edit a file directly in GitHub**
+## 环境变量
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+创建 `.env.local`：
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```
+ANTHROPIC_API_KEY=sk-...
+ANTHROPIC_BASE_URL=https://...
+```
